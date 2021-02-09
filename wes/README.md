@@ -3,6 +3,6 @@
 Subdirectories:  
 | Directory | Description |  
 | :--- | :--- |  
-| [`cohorts/`](https://github.com/talkowski-lab/dsmap/tree/master/wes/cohorts) | Processing of individual WES cohorts |  
-| [`mu/`](https://github.com/talkowski-lab/dsmap/tree/master/wes/mu) | Mutation rate modeling |  
-| [`ds/`](https://github.com/talkowski-lab/dsmap/tree/master/wes/ds) | Dosage sensitivity modeling |  
+| [`cohorts/`](https://github.com/talkowski-lab/dsmap/tree/main/wes/cohorts) | Processing of individual WES cohorts |  
+| [`mu/`](https://github.com/talkowski-lab/dsmap/tree/main/wes/mu) | Mutation rate modeling |  
+| [`ds/`](https://github.com/talkowski-lab/dsmap/tree/main/wes/ds) | Dosage sensitivity modeling |  

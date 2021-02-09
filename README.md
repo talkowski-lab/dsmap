@@ -21,15 +21,15 @@ This repository contains the working code and scripts used to:
 
 | Directory | Description |  
 | :--- | :--- |  
-| [`annotations/`](https://github.com/talkowski-lab/dsmap/tree/master/annotations) | Processing of genome annotations |  
-| [`cma/`](https://github.com/talkowski-lab/dsmap/tree/master/cma) | Processing & analysis of chromosomal microarray datasets |  
-| [`data/`](https://github.com/talkowski-lab/dsmap/tree/master/data) | Manifests of datasets used in this project |  
-| [`dockerfiles/`](https://github.com/talkowski-lab/dsmap/tree/master/dockerfiles) | Build files for Docker Images used in this project |  
-| [`integration/`](https://github.com/talkowski-lab/dsmap/tree/master/integration) | Cross-technology integration of dosage sensitivity maps |  
-| [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/master/scripts) | Stand-alone helper scripts |  
-| [`wdls/`](https://github.com/talkowski-lab/dsmap/tree/master/wdls) | Stand-alone WDL workflows |  
-| [`wes/`](https://github.com/talkowski-lab/dsmap/tree/master/wes) | Processing & analysis of whole-exome sequencing datasets |  
-| [`wgs/`](https://github.com/talkowski-lab/dsmap/tree/master/wgs) | Processing & analysis of whole-genome sequencing datasets |  
+| [`annotations/`](https://github.com/talkowski-lab/dsmap/tree/main/annotations) | Processing of genome annotations |  
+| [`cma/`](https://github.com/talkowski-lab/dsmap/tree/main/cma) | Processing & analysis of chromosomal microarray datasets |  
+| [`data/`](https://github.com/talkowski-lab/dsmap/tree/main/data) | Manifests of datasets used in this project |  
+| [`dockerfiles/`](https://github.com/talkowski-lab/dsmap/tree/main/dockerfiles) | Build files for Docker Images used in this project |  
+| [`integration/`](https://github.com/talkowski-lab/dsmap/tree/main/integration) | Cross-technology integration of dosage sensitivity maps |  
+| [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/main/scripts) | Stand-alone helper scripts |  
+| [`wdls/`](https://github.com/talkowski-lab/dsmap/tree/main/wdls) | Stand-alone WDL workflows |  
+| [`wes/`](https://github.com/talkowski-lab/dsmap/tree/main/wes) | Processing & analysis of whole-exome sequencing datasets |  
+| [`wgs/`](https://github.com/talkowski-lab/dsmap/tree/main/wgs) | Processing & analysis of whole-genome sequencing datasets |  
 
 ---  
 
