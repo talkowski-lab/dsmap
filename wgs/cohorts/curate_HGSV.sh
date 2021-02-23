@@ -11,8 +11,13 @@
 # Code to curate HGSV WGS callset for DSMap modeling
 
 
-# Run in Athena docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap
+# Launch Docker
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap:initial
+
+
+# Authenticate GCP credentials
+gcloud auth login
+gcloud config set project broad-dsmap
 
 
 # Set global parameters
@@ -24,11 +29,16 @@ export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698
 
 
 # Remove existing allele frequency annotations
-gsutil -m cp $raw_vcf ./
-zcat $( basename $raw_vcf ) \
-| fgrep -v "" \
-| fgrep -v "" \
-| 
+gsutil -m cp ${raw_vcf} ${raw_vcf}.tbi ./
+/opt/dsmap/scripts/variant_annotation/clean_af_info.py \
+  $( basename $raw_vcf ) \
+  stdout \
+| fgrep -v "##INFO=<ID=AC," \
+| fgrep -v "##INFO=<ID=AN," \
+| bgzip -c \
+> $cohort.$tech.noAFs.vcf.gz
+tabix -f $cohort.$tech.noAFs.vcf.gz
+# gsutil -m cp $cohort.$tech.noAFs.vcf.gz
 
 
 # Remove children from trios and re-annotate allele frequencies for all superpopulations

@@ -39,17 +39,10 @@ RUN conda install -n dsmap -y -c bioconda pybigwig=0.3.17
 RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf
 RUN echo "[client]\nmax_allowed_packet = 2G" >> /etc/my.cnf
 
-# Clone & install Athena
-ARG ATHENA_COMMIT="master"
-RUN git clone https://github.com/talkowski-lab/athena /opt/athena && \
-    cd /opt/athena && \
-    git checkout ${ATHENA_COMMIT} && \
-    cd -
+# Install Athena (assumes repo has been cloned into build context)
+ADD athena /opt/athena
 RUN cd /opt/athena && \
     pip install -e .
-
-# Symlink Athena core reference data to home directory (for GitHub tutorial)
-RUN ln -s /opt/athena/data /data
 
 # Developer aliases, etc (for convenience)
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \

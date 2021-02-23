@@ -12,6 +12,7 @@ Helper tool to rebuild Athena and DSMap Docker images
 
 
 import sys, argparse, os, os.path
+import tempfile
 import argparse
 
 
@@ -23,6 +24,13 @@ ordered_dockers = ['athena', 'athena-cloud', 'dsmap']
 class DockerError(Exception):
     """
     Dummy exception for errors in docker system calls
+    """
+    pass
+
+
+class GithubError(Exception):
+    """
+    Dummy exception for errors in github system calls
     """
     pass
 
@@ -61,23 +69,69 @@ def parse_commandline_args():
     push_args_group.add_argument('--update-latest', action='store_true',
                                  help='also update \"latest\" tag in remote docker repo(s)')
 
+    # Local args
+    local_args_group = parser.add_argument_group('Local options')
+    local_args_group.add_argument('--tmpdir', type=str, 
+                                  help='Specify temporary directory to use as ' +
+                                  'build context')
+
     return parser.parse_args()
 
 
-def format_build_args(args, docker, build_info):
+def make_tmpdir(tmpdir_path):
+    """
+    Create temporary directory used as build context
+    """
+
+    if tmpdir_path is None:
+        tmpdir_path = os.popen('mktemp -d').read().rstrip()
+    else:
+        os.mkdir(tmpdir_path)
+
+    os.chdir(tmpdir_path)
+
+    return tmpdir_path
+
+
+def clone_git_repo(repo_url, hash):
+    """
+    Clone a repo from GitHub and checkout specified hash
+    """
+
+    repo_name = os.path.basename(repo_url).split('.')[0]
+
+    # Clone
+    ret = os.system('git clone ' + repo_url)
+    if 0 != ret:
+        raise GithubError('Failed to clone ' + repo_url)
+
+    # Checkout
+    checkout_cmd = 'cd ' + repo_name + ' && '
+    checkout_cmd += 'git checkout ' + hash + ' && '
+    checkout_cmd += 'cd -'
+    ret = os.system(checkout_cmd)
+    if 0 != ret:
+        raise GithubError('Failed to checkout ' + hash)
+
+
+def format_build_args(args, docker, build_info, dockers_to_build):
     """
     Extract & format image-specific docker build arguments
     """
 
     build_args = ' '
 
-    if docker == 'athena':
-        build_args += '--build-arg ATHENA_COMMIT={} '.format(args.athena_hash)
-    elif docker == 'dsmap':
-        build_args += '--build-arg ATHENA_BASE_IMAGE=us.gcr.io/broad-dsmap/athena:{} '.format(args.athena_hash)
-        build_args += 'DSMAP_COMMIT={} '.format(args.dsmap_hash)
+    if docker == 'athena-cloud':
+        # Use most recent build of athena base image if athena was rebuilt
+        if 'athena' in dockers_to_build:
+            build_args += '--build-arg ATHENA_BASE_IMAGE={} '.format(build_info['athena']['remote'])
 
-    build_args += '--tag {} '.format(build_info['remote'])
+    elif docker == 'dsmap':
+        # Use most recent build of athena base image if athena was rebuilt
+        if 'athena-cloud' in dockers_to_build:
+            build_args += '--build-arg ATHENA_CLOUD_BASE_IMAGE={} '.format(build_info['athena-cloud']['remote'])
+
+    build_args += '--tag {} '.format(build_info[docker]['remote'])
 
     return build_args
 
@@ -92,16 +146,18 @@ def build_docker(build_info, build_args):
 
     # Construct docker build call
     build_cmd = 'cd {} && '.format(dockerfile_dir)
-    build_cmd += 'docker build --progress plain ' + build_args + ' . && cd - \n'
+    build_cmd += 'docker build --progress plain ' + build_args 
+    build_cmd += '-f {}/Dockerfile '.format(dockerfile_dir)
+    build_cmd += tmpdir_path + ' && cd - \n'
 
     # Build docker
-    print('Now building ' + remote + ' as follows:')
+    print('\nNow building ' + remote + ' as follows:\n')
     print(build_cmd)
     ret = os.system(build_cmd)
     if 0 != ret:
-        raise DockerError("Failed to build " + remote)
+        raise DockerError('Failed to build ' + remote)
     else:
-        print('Successfully built ' + remote)
+        print('\nSuccessfully built {}\n'.format(remote))
 
 
 def push_docker(remote):
@@ -117,7 +173,7 @@ def push_docker(remote):
     if 0 != ret:
         raise DockerError("Failed to push " + remote)
     else:
-        print('Successfully pushed ' + remote)
+        print('\nSuccessfully pushed {}\n'.format(remote))
 
 
 def retag_docker(old_remote, new_remote):
@@ -133,7 +189,16 @@ def retag_docker(old_remote, new_remote):
     if 0 != ret:
         raise DockerError("Failed to retag {} as {}".format(old_remote, new_remote))
     else:
-        print('Successfully retagged {} as {}'.format(old_remote, new_remote))
+        print('\nSuccessfully retagged {} as {}\n'.format(old_remote, new_remote))
+
+
+def cleanup():
+    """
+    Clean up build context and switch back to execution directory
+    """
+
+    os.chdir(exec_dir)
+    os.system('rm -rf ' + tmpdir_path)
 
 
 def main():
@@ -141,10 +206,17 @@ def main():
     args = parse_commandline_args()
 
     # Get path to local DSMap repo
+    global exec_dir
+    exec_dir = os.getcwd()
     dsmap_dir = '/'.join(os.path.dirname(os.path.realpath(__file__)).split('/')[:-2])
 
-    # Resolve paths to dockerfiles
-    dockers_to_build = [a for a in ordered_dockers if a in args.images]
+    # Determine which images to build
+    if 'All' in args.images:
+        dockers_to_build = ordered_dockers
+    else:
+        dockers_to_build = [a for a in ordered_dockers if a in args.images]
+
+    # Resolve paths to Dockerfiles
     print('\nBuilding the following Docker images:\n')
     for docker in dockers_to_build:
         print('  - {}:{}\n'.format(docker, args.tag))
@@ -152,26 +224,49 @@ def main():
                        'remote' : 'us.gcr.io/{}/{}:{}'.format(args.gcr_project, d, args.tag)} \
                   for d in dockers_to_build}
 
-    # Build each Docker
-    for docker in dockers_to_build:
-        build_args = format_build_args(args, docker, build_info[docker])
-        build_docker(build_info[docker], build_args)
+    # Create temporary directory to use as build context
+    try:
+        global tmpdir_path
+        tmpdir_path = make_tmpdir(args.tmpdir)
+        print('\nUsing {} as temporary build context\n'.format(tmpdir_path))
 
-    # Push each built Docker if GCR project is provided
-    if args.gcr_project is not None:
-        print('\nPushing the following Docker images:\n')
+        # Clone necessary repos
+        print('\nCloning required GitHub repos into local build context\n')
+        if 'athena' in dockers_to_build:
+            clone_git_repo('git@github.com:talkowski-lab/athena.git', args.athena_hash)
+        if 'dsmap' in dockers_to_build:
+            clone_git_repo('git@github.com:talkowski-lab/dsmap.git', args.dsmap_hash)
+
+        # Build each Docker
         for docker in dockers_to_build:
-            print('  - {}\n'.format(build_info[docker]['remote']))
+            build_args = format_build_args(args, docker, build_info, dockers_to_build)
+            build_docker(build_info[docker], build_args)
 
-        for docker in dockers_to_build:
-            push_docker(build_info[docker]['remote'])
+        # Push each built Docker if GCR project is provided
+        if args.gcr_project is not None:
+            print('\nPushing the following Docker images:\n')
+            for docker in dockers_to_build:
+                print('  - {}\n'.format(build_info[docker]['remote']))
 
-        # Also update :latest tag, if optioned
-        if args.update_latest and args.tag != 'latest':
-            print('\nAlso updating latest tag for the following Docker images:\n')
-            newtag = 'us.gcr.io/{}/{}:latest'.format(args.gcr_project, docker)
-            retag_docker(build_info['docker']['remote'], newtag)
-            push_docker(newtag)
+            for docker in dockers_to_build:
+                push_docker(build_info[docker]['remote'])
+
+            # Also update :latest tag, if optioned
+            if args.update_latest and args.tag != 'latest':
+                print('\nAlso updating latest tag for the following Docker images:\n')
+                for docker in dockers_to_build:
+                    print('  - {} => us.gcr.io/{}/{}:latest\n'.format(build_info[docker]['remote'], args.gcr_project, docker))
+                for docker in dockers_to_build:
+                    newtag = 'us.gcr.io/{}/{}:latest'.format(args.gcr_project, docker)
+                    retag_docker(build_info['docker']['remote'], newtag)
+                    push_docker(newtag)
+
+    except:
+        cleanup()
+
+    # Clean up, if successful
+    cleanup()
+    print('\nFinished building all docker images\n')
 
 
 if __name__ == '__main__':
