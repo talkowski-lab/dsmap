@@ -21,6 +21,21 @@ freq_infos = 'AN AC AF N_BI_GENOS N_HOMREF N_HET N_HOMALT FREQ_HOMREF ' + \
 freq_infos = freq_infos.split()
 
 
+def clean_header(header):
+    """
+    Clear all allele frequency info from a VCF header
+    """
+
+    info_keys = header.info.keys()
+
+    for key in info_keys:
+        if key in freq_infos \
+        or len([f for f in freq_infos if key.endswith('_' + f)]) > 0:
+            header.info.remove_header(key)
+
+    return header
+
+
 def clean_af_info(record):
     """
     Remove all allele frequency info from a single record
@@ -29,7 +44,7 @@ def clean_af_info(record):
     fields_to_pop = set()
     for field in record.info.keys():
         if field in freq_infos \
-        or len([f for f in freq_infos if '_' + f in field]) > 0:
+        or len([f for f in freq_infos if field.endswith('_' + f)]) > 0:
             fields_to_pop.add(field)
 
     for field in fields_to_pop:
@@ -53,12 +68,15 @@ def main():
         vcf = pysam.VariantFile(sys.stdin) 
     else:
         vcf = pysam.VariantFile(args.vcf)
+
+    # Clean header
+    cleaned_header = clean_header(vcf.header.copy())
     
     # Open connection to output VCF
     if args.fout in '- stdout'.split():
-        fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
+        fout = pysam.VariantFile(sys.stdout, 'w', header=cleaned_header)
     else:
-        fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
+        fout = pysam.VariantFile(args.fout, 'w', header=cleaned_header)
 
     # Clean each record before writing to file
     if args.verbose:

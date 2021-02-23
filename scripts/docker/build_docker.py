@@ -185,7 +185,7 @@ def retag_docker(old_remote, new_remote):
     tag_cmd = 'docker tag {} {}'.format(old_remote, new_remote)
 
     # Retag image
-    ret = os.system(push_cmd)
+    ret = os.system(tag_cmd)
     if 0 != ret:
         raise DockerError("Failed to retag {} as {}".format(old_remote, new_remote))
     else:
@@ -258,15 +258,15 @@ def main():
                     print('  - {} => us.gcr.io/{}/{}:latest\n'.format(build_info[docker]['remote'], args.gcr_project, docker))
                 for docker in dockers_to_build:
                     newtag = 'us.gcr.io/{}/{}:latest'.format(args.gcr_project, docker)
-                    retag_docker(build_info['docker']['remote'], newtag)
+                    retag_docker(build_info[docker]['remote'], newtag)
                     push_docker(newtag)
+
+        # Clean up, if successful
+        cleanup()
+        print('\nFinished building all docker images\n')
 
     except:
         cleanup()
-
-    # Clean up, if successful
-    cleanup()
-    print('\nFinished building all docker images\n')
 
 
 if __name__ == '__main__':

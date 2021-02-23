@@ -10,3 +10,14 @@ This subdirectory contains the code required to process each WGS cohort. Brief n
 
 Sample exclusion criteria:  
 *  Retained 3,202 samples from five superpopulations (AFR, AMR, EAS, EUR, SAS) with at least 100 samples per population  
+*  Excluded NNN children from parent-child trios, retaining NNN unrelated samples
+
+Variant filtering criteria:
+*  Biallelic deletions or duplications  
+*  Autosomal  
+*  VCF `FILTER` = `PASS`
+*  Maximum 1% allele frequency in each of the five superpopulations  
+*  Non-null genotypes present in >90% of all samples ()
+*  Minimum `QUAL` score of 100  
+*  Appears in Hardy-Weinberg Equilibrium (_P_ > 0.01 from H-W chi-squared test)  
+
