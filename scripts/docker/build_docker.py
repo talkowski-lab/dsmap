@@ -145,10 +145,9 @@ def build_docker(build_info, build_args):
     dockerfile_dir = build_info['dockerfile_dir']
 
     # Construct docker build call
-    build_cmd = 'cd {} && '.format(dockerfile_dir)
-    build_cmd += 'docker build --progress plain ' + build_args 
+    build_cmd = 'docker build --progress plain ' + build_args 
     build_cmd += '-f {}/Dockerfile '.format(dockerfile_dir)
-    build_cmd += tmpdir_path + ' && cd - \n'
+    build_cmd += tmpdir_path + '\n'
 
     # Build docker
     print('\nNow building ' + remote + ' as follows:\n')

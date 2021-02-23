@@ -29,12 +29,31 @@ export prefix="${cohort}.${tech}"
 export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698_with_GIAB.boost.PASS_gt_revised.vcf.gz"
 
 # Clone GATK-SV
-git clone git@github.com:broadinstitute/gatk-sv.git /opt/gatk-sv
+git clone https://github.com/broadinstitute/gatk-sv.git /opt/gatk-sv
 
 
 ######################################################
 #    Remove existing allele frequency annotations    #
 ######################################################
+# Make inputs .json
+cat <<EOF > $cohort.$tech.clean_af_info.input.json
+{
+  "CleanAFInfo.dsmap_docker": "us.gcr.io/broad-dsmap/dsmap:hgsv-wgs-curation",
+  "CleanAFInfo.vcf_idx": "${raw_vcf}.tbi",
+  "CleanAFInfo.vcf": "$raw_vcf",
+  "CleanAFInfo.prefix": "$prefix"
+}
+EOF
+
+# Make dependencies .zip
+if [ -e dsmap.dependencies.zip ]; then
+  rm dsmap.dependencies.zip
+fi
+cd /opt/dsmap/wdls/ && \
+zip dsmap.dependencies.zip *wdl && \
+mv dependencies.zip / && \
+cd -
+
 gsutil -m cp ${raw_vcf} ${raw_vcf}.tbi ./
 /opt/dsmap/scripts/variant_annotation/clean_af_info.py \
   $( basename $raw_vcf ) \
