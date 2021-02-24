@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap:hgsv-wgs-curation
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:hgsv-wgs-curation
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -27,6 +27,8 @@ export cohort="HGSV"
 export tech="WGS"
 export prefix="${cohort}.${tech}"
 export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698_with_GIAB.boost.PASS_gt_revised.vcf.gz"
+export BASE_PATH="$PATH"
+export CROM_CURL_PATH="/usr/bin:$PATH"
 
 # Clone GATK-SV
 git clone https://github.com/broadinstitute/gatk-sv.git /opt/gatk-sv
@@ -51,8 +53,22 @@ if [ -e dsmap.dependencies.zip ]; then
 fi
 cd /opt/dsmap/wdls/ && \
 zip dsmap.dependencies.zip *wdl && \
-mv dependencies.zip / && \
+mv dsmap.dependencies.zip / && \
 cd -
+
+# Submit to cromwell
+cd /opt/dsmap && \
+export PATH=$CROM_CURL_PATH && \
+cromshell -t 20 submit \
+  wdls/CleanAFInfo.wdl \
+  /$cohort.$tech.clean_af_info.input.json \
+  cromwell/dsmap.cromwell_options.json \
+  /dsmap.dependencies.zip \
+> /CleanAFInfo.$cohort.$tech.cromshell_submission.log && \
+export PATH=$BASE_PATH && \
+cd -
+
+
 
 gsutil -m cp ${raw_vcf} ${raw_vcf}.tbi ./
 /opt/dsmap/scripts/variant_annotation/clean_af_info.py \

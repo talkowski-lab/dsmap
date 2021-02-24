@@ -1,6 +1,7 @@
 # Processing & analysis of whole-genome sequencing (WGS) datasets  
 
 Subdirectories:  
+
 | Directory | Description |  
 | :--- | :--- |  
 | [`cohorts/`](https://github.com/talkowski-lab/dsmap/tree/main/wgs/cohorts) | Processing of individual WGS cohorts |  
