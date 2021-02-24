@@ -29,11 +29,10 @@ RUN mkdir /opt/bin && \
     ln -s /usr/bin/curl /opt/bin/curl && \
     echo 'export PATH="/opt/bin:$PATH"' >> ~/.bashrc
 
-# # Debian distro removed 1024-bit certificates required by Cromshell
-# # Must manually download certificate
-# RUN cd /etc/ssl/ && \
-#     wget https://cacerts.digicert.com/CybertrustGlobalRoot.crt.pem && \
-#     cd -
+# Cromshell within docker is unable to get local issuer certificate
+# Can work around this issue by replacing conda-installed cromshell with modified 
+# cromshell script that aliases curl -k and allows insecure connections
+RUN ln -s /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
 
 # Launch bash
 CMD ["/bin/bash"]
