@@ -13,6 +13,7 @@
 
 version 1.0
 
+import "Utils.wdl"
 import "Structs.wdl"
 
 task BinAndAnnotateGenome {
@@ -48,6 +49,7 @@ task BinAndAnnotateGenome {
   }
 
   # Scatter over contigs
+  scatter(contig in contigs) {
   
     # Step 2. Annotate 1D bins per contig
 
@@ -60,6 +62,8 @@ task BinAndAnnotateGenome {
     # Step 6. Apply PCA transformation to 2D pairs
 
     # Step 7. Merge & sort all 2D bins per chromosome
+
+  }
 
   # Step 5. Learn PCA transformation from sampled bins
 
@@ -97,7 +101,7 @@ task MakeBins {
 
     # Make bins & tabix output BED
     athena make-bins \
-      --exclude-all ~{bin_exclusion_mask} \
+      --exclusion-list-all ~{bin_exclusion_mask} \
       --buffer ~{bin_size} \
       --include-chroms $( cut -f1 contigs.genome | paste -s -d, ) \
       --bgzip \

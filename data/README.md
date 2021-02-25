@@ -2,7 +2,9 @@
 
 | Directory | Description |  
 | :--- | :--- |  
+| [`dev/`](https://github.com/talkowski-lab/dsmap/tree/main/data/dev) | Data used during model development |  
 | [`resources/`](https://github.com/talkowski-lab/dsmap/tree/main/data/resources) | Resource datasets |  
+| [`references/`](https://github.com/talkowski-lab/dsmap/tree/main/data/references) | Reference datasets |  
 | [`WGS/`](https://github.com/talkowski-lab/dsmap/tree/main/data/wgs) | Whole-genome sequencing datasets |  
 
 ### Data access
