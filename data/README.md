@@ -3,7 +3,7 @@
 | Directory | Description |  
 | :--- | :--- |  
 | [`resources/`](https://github.com/talkowski-lab/dsmap/tree/main/data/resources) | Resource datasets |  
-| [`wgs/`](https://github.com/talkowski-lab/dsmap/tree/main/data/wgs) | Whole-genome sequencing datasets |  
+| [`WGS/`](https://github.com/talkowski-lab/dsmap/tree/main/data/wgs) | Whole-genome sequencing datasets |  
 
 ### Data access
 
