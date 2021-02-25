@@ -27,8 +27,9 @@ export cohort="HGSV"
 export tech="WGS"
 export prefix="${cohort}.${tech}"
 export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698_with_GIAB.boost.PASS_gt_revised.vcf.gz"
-export BASE_PATH="$PATH"
-export CROM_CURL_PATH="/usr/bin:$PATH"
+
+# Prep directory structure
+mkdir cromwell_logs/
 
 # Clone GATK-SV
 git clone https://github.com/broadinstitute/gatk-sv.git /opt/gatk-sv
@@ -58,31 +59,27 @@ cd -
 
 # Submit to cromwell
 cd /opt/dsmap && \
-export PATH=$CROM_CURL_PATH && \
 cromshell -t 20 submit \
   wdls/CleanAFInfo.wdl \
   /$cohort.$tech.clean_af_info.input.json \
   cromwell/dsmap.cromwell_options.json \
   /dsmap.dependencies.zip \
-> /CleanAFInfo.$cohort.$tech.cromshell_submission.log && \
-export PATH=$BASE_PATH && \
+> /cromwell_logs/CleanAFInfo.$cohort.$tech.cromshell_submission.log && \
 cd -
 
+# Check status
+cromshell -t 20 metadata \
+  $( cat /cromwell_logs/CleanAFInfo.$cohort.$tech.cromshell_submission.log | tail -n1 | jq .id | tr -d '"' ) \
+| jq .status
 
+# Write output paths to file
 
-gsutil -m cp ${raw_vcf} ${raw_vcf}.tbi ./
-/opt/dsmap/scripts/variant_annotation/clean_af_info.py \
-  $( basename $raw_vcf ) \
-  stdout \
-| bgzip -c \
-> $cohort.$tech.noAFs.vcf.gz
-tabix -f $cohort.$tech.noAFs.vcf.gz
-gsutil -m cp $cohort.$tech.noAFs.vcf.gz gs://dsmap/scratch/
 
 
 ##########################################################################################
 # Remove children from trios and re-annotate allele frequencies for all superpopulations #
 ##########################################################################################
+
 
 
 ##################################################################

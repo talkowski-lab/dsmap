@@ -32,7 +32,7 @@ RUN mkdir /opt/bin && \
 # Cromshell within docker is unable to get local issuer certificate
 # Can work around this issue by replacing conda-installed cromshell with modified 
 # cromshell script that aliases curl -k and allows insecure connections
-RUN ln -s /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
+RUN ln -sf /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
 
 # Launch bash
 CMD ["/bin/bash"]
