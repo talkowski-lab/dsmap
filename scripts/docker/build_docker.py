@@ -18,7 +18,7 @@ import argparse
 
 # Set priority of dockers to build (in order)
 # (Note: do not alter this without first confirming dependencies of base images)
-ordered_dockers = ['athena', 'athena-cloud', 'dsmap']
+ordered_dockers = ['athena', 'athena-cloud', 'dsmap', 'dsmap-cromwell']
 
 
 class DockerError(Exception):
@@ -64,6 +64,8 @@ def parse_commandline_args():
     # Docker push args
     push_args_group = parser.add_argument_group('Docker push options',
                                                 'Options to push images to remote container registry')
+    push_args_group.add_argument('--no-push', action='store_true', 
+                                 help='Do not push images to GCR.')
     push_args_group.add_argument('--gcr-project', type=str, 
                                  help='GCR billing project to push the images to.')
     push_args_group.add_argument('--update-latest', action='store_true',
@@ -122,14 +124,19 @@ def format_build_args(args, docker, build_info, dockers_to_build):
     build_args = ' '
 
     if docker == 'athena-cloud':
-        # Use most recent build of athena base image if athena was rebuilt
+        # Use most recent build of athena base image if athena was also rebuilt
         if 'athena' in dockers_to_build:
             build_args += '--build-arg ATHENA_BASE_IMAGE={} '.format(build_info['athena']['remote'])
 
     elif docker == 'dsmap':
-        # Use most recent build of athena base image if athena was rebuilt
+        # Use most recent build of athena-cloud base image if athena-cloud was also rebuilt
         if 'athena-cloud' in dockers_to_build:
             build_args += '--build-arg ATHENA_CLOUD_BASE_IMAGE={} '.format(build_info['athena-cloud']['remote'])
+
+    elif docker == 'dsmap-cromwell':
+        # Use most recent build of dsmap base image if dsmap was also rebuilt
+        if 'dsmap' in dockers_to_build:
+            build_args += '--build-arg DSMAP_BASE_IMAGE={} '.format(build_info['dsmap']['remote'])
 
     build_args += '--tag {} '.format(build_info[docker]['remote'])
 
@@ -242,7 +249,7 @@ def main():
             build_docker(build_info[docker], build_args)
 
         # Push each built Docker if GCR project is provided
-        if args.gcr_project is not None:
+        if args.gcr_project is not None and not args.no_push:
             print('\nPushing the following Docker images:\n')
             for docker in dockers_to_build:
                 print('  - {}\n'.format(build_info[docker]['remote']))

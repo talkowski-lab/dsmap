@@ -22,15 +22,15 @@ This repository contains the working code and scripts used to:
 | Directory | Description |  
 | :--- | :--- |  
 | [`annotations/`](https://github.com/talkowski-lab/dsmap/tree/main/annotations) | Processing of genome annotations |  
-| [`cma/`](https://github.com/talkowski-lab/dsmap/tree/main/cma) | Processing & analysis of chromosomal microarray datasets |  
+| [`CMA/`](https://github.com/talkowski-lab/dsmap/tree/main/cma) | Processing & analysis of chromosomal microarray datasets |  
 | [`cromwell/`](https://github.com/talkowski-lab/dsmap/tree/main/cromwell) | Resources for executing cloud workflows on Cromwell |  
 | [`data/`](https://github.com/talkowski-lab/dsmap/tree/main/data) | Manifests of datasets used in this project |  
 | [`dockerfiles/`](https://github.com/talkowski-lab/dsmap/tree/main/docker) | Build files for Docker Images used in this project |  
 | [`integration/`](https://github.com/talkowski-lab/dsmap/tree/main/integration) | Cross-technology integration of dosage sensitivity maps |  
 | [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/main/scripts) | Stand-alone helper scripts |  
 | [`wdls/`](https://github.com/talkowski-lab/dsmap/tree/main/wdls) | Stand-alone WDL workflows |  
-| [`wes/`](https://github.com/talkowski-lab/dsmap/tree/main/wes) | Processing & analysis of whole-exome sequencing datasets |  
-| [`wgs/`](https://github.com/talkowski-lab/dsmap/tree/main/wgs) | Processing & analysis of whole-genome sequencing datasets |  
+| [`WES/`](https://github.com/talkowski-lab/dsmap/tree/main/wes) | Processing & analysis of whole-exome sequencing datasets |  
+| [`WGS/`](https://github.com/talkowski-lab/dsmap/tree/main/wgs) | Processing & analysis of whole-genome sequencing datasets |  
 
 ---  
 

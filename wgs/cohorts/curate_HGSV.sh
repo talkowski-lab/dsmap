@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap:hgsv-wgs-curation
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:hgsv-wgs-curation
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -27,6 +27,9 @@ export cohort="HGSV"
 export tech="WGS"
 export prefix="${cohort}.${tech}"
 export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698_with_GIAB.boost.PASS_gt_revised.vcf.gz"
+
+# Prep directory structure
+mkdir cromwell_logs/
 
 # Clone GATK-SV
 git clone https://github.com/broadinstitute/gatk-sv.git /opt/gatk-sv
@@ -51,22 +54,32 @@ if [ -e dsmap.dependencies.zip ]; then
 fi
 cd /opt/dsmap/wdls/ && \
 zip dsmap.dependencies.zip *wdl && \
-mv dependencies.zip / && \
+mv dsmap.dependencies.zip / && \
 cd -
 
-gsutil -m cp ${raw_vcf} ${raw_vcf}.tbi ./
-/opt/dsmap/scripts/variant_annotation/clean_af_info.py \
-  $( basename $raw_vcf ) \
-  stdout \
-| bgzip -c \
-> $cohort.$tech.noAFs.vcf.gz
-tabix -f $cohort.$tech.noAFs.vcf.gz
-gsutil -m cp $cohort.$tech.noAFs.vcf.gz gs://dsmap/scratch/
+# Submit to cromwell
+cd /opt/dsmap && \
+cromshell -t 20 submit \
+  wdls/CleanAFInfo.wdl \
+  /$cohort.$tech.clean_af_info.input.json \
+  cromwell/dsmap.cromwell_options.json \
+  /dsmap.dependencies.zip \
+> /cromwell_logs/CleanAFInfo.$cohort.$tech.cromshell_submission.log && \
+cd -
+
+# Check status
+cromshell -t 20 metadata \
+  $( cat /cromwell_logs/CleanAFInfo.$cohort.$tech.cromshell_submission.log | tail -n1 | jq .id | tr -d '"' ) \
+| jq .status
+
+# Write output paths to file
+
 
 
 ##########################################################################################
 # Remove children from trios and re-annotate allele frequencies for all superpopulations #
 ##########################################################################################
+
 
 
 ##################################################################

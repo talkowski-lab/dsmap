@@ -1,7 +1,7 @@
 # Whole-genome sequencing data manifest  
 
 All WGS-related data is stored in the following Google Bucket:  
-`gs://dsmap/data/wgs/`  
+`gs://dsmap/data/WGS/`  
 
 Additional details for each cohort are provided in the table below:  
 
