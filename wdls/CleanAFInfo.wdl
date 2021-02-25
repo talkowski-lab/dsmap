@@ -1,3 +1,16 @@
+#######################
+#    DSMap Project    #
+#######################
+#
+# CleanAFInfo.wdl
+#
+# Clean all allele frequency information from an input VCF
+#
+# Copyright (c) 2021-Present Ryan L. Collins and the Talkowski Laboratory
+# Distributed under terms of the MIT License (see LICENSE)
+# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+
+
 version 1.0
 
 import "Structs.wdl"
@@ -7,7 +20,10 @@ workflow CleanAFInfo {
     File vcf
     File vcf_idx
     String prefix
+
     String dsmap_docker
+
+    RuntimeAttr? runtime_attr_override
   }
 
   call cleanVCF {
@@ -15,7 +31,8 @@ workflow CleanAFInfo {
       vcf=vcf,
       vcf_idx=vcf_idx,
       prefix=prefix,
-      dsmap_docker=dsmap_docker
+      dsmap_docker=dsmap_docker,
+      runtime_attr_override=runtime_attr_override
   }
 
   output {
