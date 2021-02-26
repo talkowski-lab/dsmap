@@ -16,22 +16,23 @@ version 1.0
 import "Utils.wdl"
 import "Structs.wdl"
 
-task BinAndAnnotateGenome {
+workflow BinAndAnnotateGenome {
 	input {
     File contigs_fai
-    File bin_annotations_list
-    File pair_annotations_list
+    # File bin_annotations_list
+    # File pair_annotations_list
     File bin_exclusion_mask
     String prefix
 
     Int bin_size
-    Int max_pair_distance
+    # Int max_pair_distance
     Int bins_per_shard
-    Int pairs_for_pca
+    # Int pairs_for_pca
 
     String athena_docker
 
     RuntimeAttr? runtime_attr_make_bins
+    RuntimeAttr? runtime_attr_chrom_shard_1d
   }
 
   Array[Array[String]] contigs = read_tsv(contigs_fai)
@@ -49,7 +50,19 @@ task BinAndAnnotateGenome {
   }
 
   # Scatter over contigs
-  scatter(contig in contigs) {
+  scatter( contig in contigs ) {
+    # Shard bins from each chromosome
+    call Utils.SingleChromShard as ChromShard1D {
+      input:
+        infile=MakeBins.bins_bed,
+        infile_idx=MakeBins.bins_bed_idx,
+        contig="contig[0]",
+        shard_size=bins_per_shard,
+        prefix=prefix,
+        file_format="bed",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_chrom_shard_1d
+    }
   
     # Step 2. Annotate 1D bins per contig
 
@@ -121,7 +134,7 @@ task MakeBins {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: dsmap_docker
+    docker: athena_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

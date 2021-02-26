@@ -47,15 +47,54 @@ for CNV in DEL DUP; do
 done
 
 
-##################################
-#    Bin and annotate genome     #
-##################################
+######################################################
+#    Bin and annotate genome - one-shot workflow     #
+######################################################
+# Make inputs .json
+cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
+{
+  "BinAndAnnotateGenome.bin_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
+  "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:wgs-mu-dev",
+  "BinAndAnnotateGenome.bins_per_shard": 1000,
+  "BinAndAnnotateGenome.prefix": "$prefix",
+  "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
+  "BinAndAnnotateGenome.bin_size": 25000
+}
+EOF
+
+# Make dependencies .zip
+if [ -e dsmap.dependencies.zip ]; then
+  rm dsmap.dependencies.zip
+fi
+cd /opt/dsmap/wdls/ && \
+zip dsmap.dependencies.zip *wdl && \
+mv dsmap.dependencies.zip / && \
+cd -
+
+# Submit to cromwell
+cd /opt/dsmap && \
+cromshell -t 20 submit \
+  wdls/BinAndAnnotateGenome.wdl \
+  /cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json \
+  cromwell/dsmap.cromwell_options.json \
+  /dsmap.dependencies.zip \
+> /cromwell/logs/$prefix.BinAndAnnotateGenome.log && \
+cd -
+
+# Check status
+cromshell -t 20 metadata \
+  $( cat /cromwell/logs/$prefix.BinAndAnnotateGenome.log | tail -n1 | jq .id | tr -d '"' ) \
+| jq .status
+
+
+##########################################################
+#    Bin and annotate genome - step by step, locally     #
+##########################################################
 # Download necessary inputs to BinAndAnnotateGenome.wdl
 gsutil -m cp \
   gs://dsmap/data/dev/hg38.contigs.dev.fai \
   gs://dsmap/data/references/hg38.nmask.bed.gz \
   ./
-
 
 # Set parameters as required in BinAndAnnotateGenome.wdl
 export contigs_fai=hg38.contigs.dev.fai
