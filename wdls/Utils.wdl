@@ -46,18 +46,19 @@ task SingleChromShard {
     set -euo pipefail
 
     # Extract header
-    tabix -p "~{file_format}" -H ~{infile} > header
+    tabix -H ~{infile} > header
 
     # Extract chromosome of interest and split into smaller shards
-    tabix -p "~{file_format}" ~{infile} "~{contig}" \
+    tabix ~{infile} "~{contig}" \
     | split -d -a 7 -l ~{shard_size} - shardfile_
+    find ./ -name "shardfile_*"
 
     # Clean up shards
     n_shards=$( find ./ -name "shardfile_*" | wc -l )
     for i in $( seq -w 0000000 $(( $n_shards - 1 )) ); do
       cat header shardfile_$i \
-        | bgzip -c \
-        > "~{prefix}.~{contig}.shard_$i.~{file_format}.gz"
+      | bgzip -c \
+      > "~{prefix}.~{contig}.shard_$i.~{file_format}.gz"
       # Tabix to ensure the shards are properly formatted
       tabix -p "~{file_format}" -f \
         "~{prefix}.~{contig}.shard_$i.~{file_format}.gz"

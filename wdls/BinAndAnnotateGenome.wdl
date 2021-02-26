@@ -20,16 +20,21 @@ workflow BinAndAnnotateGenome {
 	input {
     File contigs_fai
     # File bin_annotations_list
+    File bin_annotations_list_ucsc
     # File pair_annotations_list
     File bin_exclusion_mask
     String prefix
-
     Int bin_size
     # Int max_pair_distance
     Int bins_per_shard
     # Int pairs_for_pca
 
+    String? ref_build = "hg38"
+    File? ref_fasta
+    File? ref_fasta_idx
+
     String athena_docker
+    String athena_cloud_docker
 
     RuntimeAttr? runtime_attr_make_bins
     RuntimeAttr? runtime_attr_chrom_shard_1d
@@ -69,6 +74,15 @@ workflow BinAndAnnotateGenome {
     scatter( shard in ChromShard1D.shards ) {
     
       # Step 2. Annotate 1D bins per contig
+      call AnnotateBins1D {
+        input:
+          bed=shard,
+          bin_annotations_list_ucsc=bin_annotations_list_ucsc,
+          ref_build=ref_build,
+          ref_fasta=ref_fasta,
+          ref_fasta_idx=ref_fasta_idx,
+          athena_cloud_docker=athena_cloud_docker
+      }
 
       # Step 3. Pair 2D bins and add 2D annotations
 
@@ -143,5 +157,63 @@ task MakeBins {
     docker: athena_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Annotate a BED file of 1D bins
+task AnnotateBins1D {
+  input {
+    File bed
+    String ref_build
+    
+    File? bin_annotations_list_ucsc
+    File? ref_fasta
+    File? ref_fasta_idx
+    File? snv_mutrates_tsv
+
+    String athena_cloud_docker
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 100,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    # Prepare inputs
+    out_prefix=$( echo "~{bed}" | sed 's/\.bed\.gz//g' )
+
+    # Build options for athena annotate-bins
+    athena_options=""
+    if [ ! -z ${bin_annotations_list_ucsc} ]; then
+      athena_options="$athena_options --ucsc-list ${bin_annotations_list_ucsc}"
+    fi
+    if [ ! -z ~{ref_fasta} ]; then
+      athena_options="$athena_options --fasta ~{ref_fasta}"
+    fi
+    if [ ! -z ~{snv_mutrates_tsv} ]; then
+      athena_options="$athena_options --snv-mutrate ~{snv_mutrates_tsv}"
+    fi
+
+    # Annotate bins with athena
+    athena_cmd="athena annotate-bins --ucsc-ref ~{ref_build} $athena_options"
+    athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
+    athena_cmd="$athena_cmd ~{bed} ${out_prefix}.annotated.bed.gz"
+    echo -e "Now annotating using command:\n$athena_cmd"
+    eval $athena_cmd
+    tabix -f ${out_prefix}.annotated.bed.gz
+  }
+
+  output {
+    File annotated_bed = "*.annotated.bed.gz"
+    File annotated_bed_idx = "*.annotated.bed.gz.tbi"
   }
 }

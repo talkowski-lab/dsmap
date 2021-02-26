@@ -50,9 +50,9 @@ def parse_commandline_args():
     build_args_group = parser.add_argument_group('Build options', 'Options when building images')
     required_args_group.add_argument('-t', '--tag', type=str, default="latest",
                                      help="Tag applied to all images.")
-    build_args_group.add_argument('-i', '--images', nargs='+', type=str, default='All',
-                                  choices=['All'] + ordered_dockers, 
-                                  help='Specify which images to build [default: All]')
+    build_args_group.add_argument('-i', '--images', nargs='+', type=str, default='all',
+                                  choices=['all'] + ordered_dockers, 
+                                  help='Specify which images to build [default: all]')
 
     # GitHub args
     github_args_group = parser.add_argument_group('GitHub options', 'Options for GitHub repos')
@@ -217,7 +217,7 @@ def main():
     dsmap_dir = '/'.join(os.path.dirname(os.path.realpath(__file__)).split('/')[:-2])
 
     # Determine which images to build
-    if 'All' in args.images:
+    if 'all' in args.images:
         dockers_to_build = ordered_dockers
     else:
         dockers_to_build = [a for a in ordered_dockers if a in args.images]

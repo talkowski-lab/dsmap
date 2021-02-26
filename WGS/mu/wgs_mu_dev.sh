@@ -54,11 +54,12 @@ done
 cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
 {
   "BinAndAnnotateGenome.bin_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
-  "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:wgs-mu-dev",
-  "BinAndAnnotateGenome.bins_per_shard": 1000,
-  "BinAndAnnotateGenome.prefix": "$prefix",
   "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
-  "BinAndAnnotateGenome.bin_size": 25000
+  "BinAndAnnotateGenome.prefix": "$prefix",
+  "BinAndAnnotateGenome.bin_size": 25000,
+  "BinAndAnnotateGenome.bins_per_shard": 1000,
+  "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:wgs-mu-dev",
+  "BinAndAnnotateGenome.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:wgs-mu-dev"
 }
 EOF
 
@@ -94,6 +95,10 @@ cromshell -t 20 metadata \
 gsutil -m cp \
   gs://dsmap/data/dev/hg38.contigs.dev.fai \
   gs://dsmap/data/references/hg38.nmask.bed.gz \
+  gs://dsmap/data/references/hg38.fa \
+  gs://dsmap/data/references/hg38.fa.fai \
+  gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz \
+  gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv \
   ./
 
 # Set parameters as required in BinAndAnnotateGenome.wdl
@@ -101,6 +106,11 @@ export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
 export bin_size=25000
 export bins_per_shard=1000
+export ref_fasta=hg38.fa
+export ref_fasta_idx=hg38.fa.fai
+export ref_build=hg38
+export snv_mutrates_tsv=snv_mutation_rates.Samocha_2014.tsv.gz
+export bin_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.tsv
 
 # Step 1. Create all 1D bins
 cut -f1-2 ${contigs_fai} > contigs.genome
@@ -122,6 +132,26 @@ cat <( tabix -H ${prefix}.bins.bed.gz ) \
     <( tabix ${prefix}.bins.bed.gz chr22 | head -n${bins_per_shard} ) \
 | bgzip -c \
 > ${prefix}.${contig}.shard_000000.bed.gz
+export bed="${prefix}.${contig}.shard_000000.bed.gz"
+out_prefix=$( echo ${bed} | sed 's/\.bed\.gz//g' )
+athena_options=""
+if [ ! -z ${bin_annotations_list_ucsc} ]; then
+  athena_options="$athena_options --ucsc-list ${bin_annotations_list_ucsc}"
+fi
+if [ ! -z ${ref_fasta} ]; then
+  athena_options="$athena_options --fasta ${ref_fasta}"
+fi
+if [ ! -z ${snv_mutrates_tsv} ]; then
+  athena_options="$athena_options --snv-mutrate ${snv_mutrates_tsv}"
+fi
+athena_cmd="athena annotate-bins --ucsc-ref ${ref_build} $athena_options"
+athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
+athena_cmd="$athena_cmd ${bed} ${out_prefix}.annotated.bed.gz"
+echo -e "Now annotating using command:\n$athena_cmd"
+eval $athena_cmd
+tabix -f ${out_prefix}.annotated.bed.gz
+
+
 
 
 
