@@ -49,30 +49,36 @@ workflow BinAndAnnotateGenome {
       runtime_attr_override=runtime_attr_make_bins
   }
 
-  # Scatter over contigs
+  # Process each chromosome in parallel
   scatter( contig in contigs ) {
+
     # Shard bins from each chromosome
     call Utils.SingleChromShard as ChromShard1D {
       input:
         infile=MakeBins.bins_bed,
         infile_idx=MakeBins.bins_bed_idx,
-        contig="contig[0]",
+        contig=contig[0],
         shard_size=bins_per_shard,
         prefix=prefix,
         file_format="bed",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_chrom_shard_1d
     }
-  
-    # Step 2. Annotate 1D bins per contig
 
-    # Step 3. Pair 2D bins and add 2D annotations
+    # Scatter over shards per chromosome
+    scatter( shard in ChromShard1D.shards ) {
+    
+      # Step 2. Annotate 1D bins per contig
 
-    # Step 4. Uniformly sample pairs per chromosome
+      # Step 3. Pair 2D bins and add 2D annotations
 
-    # (Step 5 called outside of scatter; see below)
+      # Step 4. Uniformly sample pairs per chromosome
 
-    # Step 6. Apply PCA transformation to 2D pairs
+      # (Step 5 called outside of scatter; see below)
+
+      # Step 6. Apply PCA transformation to 2D pairs
+
+    }
 
     # Step 7. Merge & sort all 2D bins per chromosome
 

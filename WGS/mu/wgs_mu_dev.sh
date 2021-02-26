@@ -100,6 +100,7 @@ gsutil -m cp \
 export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
 export bin_size=25000
+export bins_per_shard=1000
 
 # Step 1. Create all 1D bins
 cut -f1-2 ${contigs_fai} > contigs.genome
@@ -113,7 +114,16 @@ athena make-bins \
   ${prefix}.bins.bed.gz
 tabix -f ${prefix}.bins.bed.gz
 
-# Step 2: 
+# Step 2: annotate 1D bins per contig
+# (Note: for dev. purposes, subsetting this to 1,000 bins on chr22 as 
+#  it would be handled in BinAndAnnotateGenome.wdl)
+export contig=chr22
+cat <( tabix -H ${prefix}.bins.bed.gz ) \
+    <( tabix ${prefix}.bins.bed.gz chr22 | head -n${bins_per_shard} ) \
+| bgzip -c \
+> ${prefix}.${contig}.shard_000000.bed.gz
+
+
 
 
 
