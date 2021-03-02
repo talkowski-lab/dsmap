@@ -9,4 +9,4 @@ Additional details for certain subsets are described below:
 
 | Subdirectory | Description |  
 | :--- | :--- |  
-| `bams/` | | BAM files and their indexes preprocessed by `PreprocessExternalBAMs.wdl` |  
+| `bams/` | | BAM files and their indexes preprocessed by `PreprocessExternalBAMs.wdl`. A list of all BAMs preprocessed are provided in `bams/ENCODE.bams_to_curate.tsv`. |  
