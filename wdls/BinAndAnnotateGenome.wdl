@@ -19,8 +19,6 @@ import "Structs.wdl"
 workflow BinAndAnnotateGenome {
 	input {
     File contigs_fai
-    # File bin_annotations_list
-    File bin_annotations_list_ucsc
     # File pair_annotations_list
     File bin_exclusion_mask
     String prefix
@@ -29,6 +27,9 @@ workflow BinAndAnnotateGenome {
     Int bins_per_shard
     # Int pairs_for_pca
 
+    File? bin_annotations_list
+    File? bin_annotations_list_remote_tabix
+    File? bin_annotations_list_ucsc
     String? ref_build = "hg38"
     File? ref_fasta
     File? ref_fasta_idx
@@ -55,7 +56,7 @@ workflow BinAndAnnotateGenome {
   }
 
   # Process each chromosome in parallel
-  scatter( contig in contigs ) {
+  scatter ( contig in contigs ) {
 
     # Shard bins from each chromosome
     call Utils.SingleChromShard as ChromShard1D {
@@ -77,6 +78,8 @@ workflow BinAndAnnotateGenome {
       call AnnotateBins1D {
         input:
           bed=shard,
+          bin_annotations_list=bin_annotations_list,
+          bin_annotations_list_remote_tabix=bin_annotations_list_remote_tabix,
           bin_annotations_list_ucsc=bin_annotations_list_ucsc,
           ref_build=ref_build,
           ref_fasta=ref_fasta,
@@ -167,6 +170,8 @@ task AnnotateBins1D {
     File bed
     String ref_build
     
+    File? bin_annotations_list
+    File? bin_annotations_list_remote_tabix
     File? bin_annotations_list_ucsc
     File? ref_fasta
     File? ref_fasta_idx
@@ -190,11 +195,32 @@ task AnnotateBins1D {
 
     # Prepare inputs
     out_prefix=$( echo "~{bed}" | sed 's/\.bed\.gz//g' )
+    zcat ~{bed} | fgrep -v "#" | sort -Vk1,1 -k2,2n -k3,3n | bedtools merge -i - > regions.bed
+    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    # Slice large input files hosted remotely with athena slice-remote
+    if [ ! -z ~{bin_annotations_list} ]; then
+      cat ~{bin_annotations_list} > local_tracks.tsv
+    fi
+    if [ ! -z ~{bin_annotations_list_remote_tabix} ]; then
+      if [ ! -z ${ref_fasta} ]; then
+        remote_options="--ref-fasta ~{ref_fasta}"
+      else
+        remote_options=""
+      fi
+      athena slice-remote $remote_options \
+        ~{bin_annotations_list_remote_tabix} \
+        regions.bed \
+      >> local_tracks.tsv
+    fi
 
     # Build options for athena annotate-bins
     athena_options=""
-    if [ ! -z ${bin_annotations_list_ucsc} ]; then
-      athena_options="$athena_options --ucsc-list ${bin_annotations_list_ucsc}"
+    if [ ! -z local_tracks.tsv ]; then
+      athena_options="$athena_options --track-list local_tracks.tsv"
+    fi
+    if [ ! -z ~{bin_annotations_list_ucsc} ]; then
+      athena_options="$athena_options --ucsc-list ~{bin_annotations_list_ucsc}"
     fi
     if [ ! -z ~{ref_fasta} ]; then
       athena_options="$athena_options --fasta ~{ref_fasta}"
