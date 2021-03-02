@@ -204,6 +204,9 @@ task AnnotateBins1D {
     | bedtools merge -i - \
     > regions.bed
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    if [ ! -z ~{ref_fasta} ]; then
+      samtools faidx ~{ref_fasta}
+    fi
 
     # Slice large input files hosted remotely with athena slice-remote
     if [ ! -z ~{bin_annotations_list} ]; then

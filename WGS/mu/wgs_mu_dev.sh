@@ -15,11 +15,12 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-e17989-01bf1d
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-045d9d-0f58ab
 
 # Authenticate GCP credentials
 gcloud auth login
 gcloud config set project broad-dsmap
+gcloud auth application-default login
 
 # Set global parameters
 export cohort="HGSV"
@@ -144,6 +145,9 @@ zcat ${bed} \
 | bedtools merge -i - \
 > regions.bed
 export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+if [ ! -z ${ref_fasta} ]; then
+  samtools faidx ${ref_fasta}
+fi
 
 # Slice large input files hosted remotely with athena slice-remote
 if [ ! -z ${bin_annotations_list} ]; then
