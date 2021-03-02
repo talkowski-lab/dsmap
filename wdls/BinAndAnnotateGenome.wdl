@@ -28,11 +28,10 @@ workflow BinAndAnnotateGenome {
     # Int pairs_for_pca
 
     File? bin_annotations_list
-    File? bin_annotations_list_remote_tabix
+    File? bin_annotations_list_remote
     File? bin_annotations_list_ucsc
     String? ref_build = "hg38"
     File? ref_fasta
-    File? ref_fasta_idx
 
     String athena_docker
     String athena_cloud_docker
@@ -78,12 +77,12 @@ workflow BinAndAnnotateGenome {
       call AnnotateBins1D {
         input:
           bed=shard,
+          bedtools_genome_file=ChromShard1D.bedtools_genome_file,
           bin_annotations_list=bin_annotations_list,
-          bin_annotations_list_remote_tabix=bin_annotations_list_remote_tabix,
+          bin_annotations_list_remote=bin_annotations_list_remote,
           bin_annotations_list_ucsc=bin_annotations_list_ucsc,
           ref_build=ref_build,
           ref_fasta=ref_fasta,
-          ref_fasta_idx=ref_fasta_idx,
           athena_cloud_docker=athena_cloud_docker
       }
 
@@ -150,6 +149,7 @@ task MakeBins {
   output {
     File bins_bed = "~{prefix}.bins.bed.gz"
     File bins_bed_idx = "~{prefix}.bins.bed.gz.tbi"
+    File bedtools_genome_file = "contigs.genome"
   }
   
   runtime {
@@ -168,14 +168,16 @@ task MakeBins {
 task AnnotateBins1D {
   input {
     File bed
+    File bedtools_genome_file
     String ref_build
     
     File? bin_annotations_list
-    File? bin_annotations_list_remote_tabix
+    File? bin_annotations_list_remote
     File? bin_annotations_list_ucsc
     File? ref_fasta
-    File? ref_fasta_idx
     File? snv_mutrates_tsv
+
+    Int? query_slop = 1000
 
     String athena_cloud_docker
   }
@@ -195,23 +197,29 @@ task AnnotateBins1D {
 
     # Prepare inputs
     out_prefix=$( echo "~{bed}" | sed 's/\.bed\.gz//g' )
-    zcat ~{bed} | fgrep -v "#" | sort -Vk1,1 -k2,2n -k3,3n | bedtools merge -i - > regions.bed
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    zcat ~{bed} \
+    | fgrep -v "#" \
+    | bedtools slop -i - -g ~{bedtools_genome_file} -b ~{query_slop} \
+    | sort -Vk1,1 -k2,2n -k3,3n \
+    | bedtools merge -i - \
+    > regions.bed
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     # Slice large input files hosted remotely with athena slice-remote
     if [ ! -z ~{bin_annotations_list} ]; then
       cat ~{bin_annotations_list} > local_tracks.tsv
     fi
-    if [ ! -z ~{bin_annotations_list_remote_tabix} ]; then
+    if [ ! -z ~{bin_annotations_list_remote} ]; then
       if [ ! -z ${ref_fasta} ]; then
         remote_options="--ref-fasta ~{ref_fasta}"
       else
         remote_options=""
       fi
       athena slice-remote $remote_options \
-        ~{bin_annotations_list_remote_tabix} \
-        regions.bed \
-      >> local_tracks.tsv
+        --updated-tsv local_slices.tsv \
+        ~{bin_annotations_list_remote} \
+        regions.bed
+      cat local_slices.tsv >> local_tracks.tsv
     fi
 
     # Build options for athena annotate-bins

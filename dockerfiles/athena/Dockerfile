@@ -19,7 +19,7 @@ RUN apt-get -qqy update && \
 # Note: in practice, it's more sane to install packages one at a time
 # due to intermittent HTTPS timeouts
 RUN conda update -n base conda
-RUN conda create --name=dsmap python=3.8
+RUN conda create --name=dsmap python=3.7.3
 # RUN conda config --set ssl_verify no
 RUN conda config --add channels anaconda
 RUN conda config --add channels conda-forge

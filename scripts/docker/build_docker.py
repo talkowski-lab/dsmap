@@ -50,7 +50,7 @@ def parse_commandline_args():
     build_args_group = parser.add_argument_group('Build options', 'Options when building images')
     required_args_group.add_argument('-t', '--tag', type=str, default="latest",
                                      help="Tag applied to all images.")
-    required_args_group.add_argument('--addHashesToTag', action='store_true',
+    required_args_group.add_argument('--add-hashes-to-tag', action='store_true',
                                      help="Suffix image tags with first six characters " +
                                      "of GitHub hashes.")
     build_args_group.add_argument('-i', '--images', nargs='+', type=str, default='all',
@@ -229,9 +229,9 @@ def main():
     print('\nBuilding the following Docker images:\n')
     for docker in dockers_to_build:
         print('  - {}:{}\n'.format(docker, args.tag))
-    if args.addHashesToTag:
+    if args.add_hashes_to_tag:
         build_info = {d : {'dockerfile_dir' : '{}/dockerfiles/{}'.format(dsmap_dir, d),
-                           'remote' : 'us.gcr.io/{}/{}:{}_{}_{}'.format(args.gcr_project, d, args.tag, 
+                           'remote' : 'us.gcr.io/{}/{}:{}-{}-{}'.format(args.gcr_project, d, args.tag, 
                                                                         args.athena_hash[:6], 
                                                                         args.dsmap_hash[:6])} \
                       for d in dockers_to_build}

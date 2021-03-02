@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:latest
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-e17989-01bf1d
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -96,8 +96,8 @@ gsutil -m cp \
   gs://dsmap/data/dev/hg38.contigs.dev.fai \
   gs://dsmap/data/references/hg38.nmask.bed.gz \
   gs://dsmap/data/references/hg38.fa \
-  gs://dsmap/data/references/hg38.fa.fai \
   gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz \
+  gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.tsv \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv \
   ./
 
@@ -106,14 +106,16 @@ export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
 export bin_size=25000
 export bins_per_shard=1000
+export query_slop=1000
 export ref_fasta=hg38.fa
-export ref_fasta_idx=hg38.fa.fai
 export ref_build=hg38
 export snv_mutrates_tsv=snv_mutation_rates.Samocha_2014.tsv.gz
+export bin_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.tsv
 export bin_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.tsv
 
 # Step 1. Create all 1D bins
 cut -f1-2 ${contigs_fai} > contigs.genome
+export bedtools_genome_file=contigs.genome
 athena make-bins \
   --exclusion-list-all ${bin_exclusion_mask} \
   --buffer ${bin_size} \
@@ -133,8 +135,38 @@ cat <( tabix -H ${prefix}.bins.bed.gz ) \
 | bgzip -c \
 > ${prefix}.${contig}.shard_000000.bed.gz
 export bed="${prefix}.${contig}.shard_000000.bed.gz"
-out_prefix=$( echo ${bed} | sed 's/\.bed\.gz//g' )
+# Prepare inputs
+out_prefix=$( echo "${bed}" | sed 's/\.bed\.gz//g' )
+zcat ${bed} \
+| fgrep -v "#" \
+| bedtools slop -i - -g ${bedtools_genome_file} -b ${query_slop} \
+| sort -Vk1,1 -k2,2n -k3,3n \
+| bedtools merge -i - \
+> regions.bed
+export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+# Slice large input files hosted remotely with athena slice-remote
+if [ ! -z ${bin_annotations_list} ]; then
+  cat ${bin_annotations_list} > local_tracks.tsv
+fi
+if [ ! -z ${bin_annotations_list_remote} ]; then
+  if [ ! -z ${ref_fasta} ]; then
+    remote_options="--ref-fasta ${ref_fasta}"
+  else
+    remote_options=""
+  fi
+  athena slice-remote $remote_options \
+    --updated-tsv local_slices.tsv \
+    ${bin_annotations_list_remote} \
+    regions.bed
+  cat local_slices.tsv >> local_tracks.tsv
+fi
+
+# Build options for athena annotate-bins
 athena_options=""
+if [ ! -z local_tracks.tsv ]; then
+  athena_options="$athena_options --track-list local_tracks.tsv"
+fi
 if [ ! -z ${bin_annotations_list_ucsc} ]; then
   athena_options="$athena_options --ucsc-list ${bin_annotations_list_ucsc}"
 fi
@@ -144,20 +176,13 @@ fi
 if [ ! -z ${snv_mutrates_tsv} ]; then
   athena_options="$athena_options --snv-mutrate ${snv_mutrates_tsv}"
 fi
+
+# Annotate bins with athena
 athena_cmd="athena annotate-bins --ucsc-ref ${ref_build} $athena_options"
 athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
 athena_cmd="$athena_cmd ${bed} ${out_prefix}.annotated.bed.gz"
 echo -e "Now annotating using command:\n$athena_cmd"
 eval $athena_cmd
 tabix -f ${out_prefix}.annotated.bed.gz
-
-
-
-
-
-
-
-
-
 
 
