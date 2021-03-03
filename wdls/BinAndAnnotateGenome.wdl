@@ -49,7 +49,7 @@ workflow BinAndAnnotateGenome {
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_make_bins
-    RuntimeAttr? runtime_attr_chrom_shard_1d
+    RuntimeAttr? runtime_attr_chrom_shard
     RuntimeAttr? runtime_attr_annotate_bins
     RuntimeAttr? runtime_attr_merge_annotated_bins
     RuntimeAttr? runtime_attr_make_pairs
@@ -89,7 +89,7 @@ workflow BinAndAnnotateGenome {
         snv_mutrates_tsv=snv_mutrates_tsv,
         athena_docker=athena_docker,
         athena_cloud_docker=athena_cloud_docker,
-        runtime_attr_chrom_shard=runtime_attr_chrom_shard_1d,
+        runtime_attr_chrom_shard=runtime_attr_chrom_shard,
         runtime_attr_annotate_bins=runtime_attr_annotate_bins,
         runtime_attr_merge_annotated_bins=runtime_attr_merge_annotated_bins
     }

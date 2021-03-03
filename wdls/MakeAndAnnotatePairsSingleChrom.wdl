@@ -58,7 +58,8 @@ workflow MakeAndAnnotatePairsSingleChrom {
         pair_exclusion_mask=pair_exclusion_mask,
         max_pair_distance=max_pair_distance,
         prefix=prefix,
-        athena_docker=athena_docker
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_make_pairs
     }
 
     # Annotate pairs per shard
@@ -70,6 +71,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
 
   # Merge sampled pairs per shard for PCA, if optioned
 
+  output {}
 }
 
 
@@ -84,7 +86,7 @@ task MakePairs {
 
     String athena_docker
 
-    RuntimeAttr? runtime_attr_make_pairs
+    RuntimeAttr? runtime_attr_override
   }
   
   RuntimeAttr default_attr = object {
@@ -127,7 +129,7 @@ task MakePairs {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: athena_cloud_docker
+    docker: athena_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
