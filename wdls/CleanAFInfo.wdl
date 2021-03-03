@@ -15,6 +15,7 @@ version 1.0
 
 import "Structs.wdl"
 
+
 workflow CleanAFInfo {
   input {
     File vcf

@@ -79,3 +79,66 @@ task SingleChromShard {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+# Merge, sort, and tabix an array of BED files
+task MergeBEDs {
+  input {
+    Array[File] beds
+    String prefix
+    Boolean beds_are_bgzipped = true
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 250,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    if [ ~{beds_are_bgzipped} == "true" ]; then
+      zcat ~{beds[0]} | grep -e '^#' > header.tsv
+      zcat ~{sep=" " beds} \
+      | grep -ve '^#' \
+      | sort -Vk1,1 -k2,2n -k3,3n \
+      | cat header.tsv - \
+      | bgzip -c \
+      > "~{prefix}.bed.gz"
+    else
+      grep -e '^#' ~{beds[0]} > header.tsv
+      cat ~{sep=" " beds} \
+      | grep -ve '^#' \
+      | sort -Vk1,1 -k2,2n -k3,3n \
+      | cat header.tsv - \
+      | bgzip -c \
+      > "~{prefix}.bed.gz"
+    fi
+
+    tabix -p bed -f "~{prefix}.bed.gz"
+  }
+
+  output {
+    File merged_bed = "~{prefix}.bed.gz"
+    File merged_bed_idx = "~{prefix}.bed.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

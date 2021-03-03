@@ -2,7 +2,7 @@
 #    DSMap Project    #
 #######################
 #
-# CleanAFInfo.wdl
+# BinAndAnnotateGenome.wdl
 #
 # Bin and annotate a genome or set of chromosomes
 #
@@ -15,29 +15,44 @@ version 1.0
 
 import "Utils.wdl"
 import "Structs.wdl"
+import "AnnotateBinsSingleChrom.wdl"
+import "MakeAndAnnotatePairsSingleChrom.wdl"
+
 
 workflow BinAndAnnotateGenome {
-	input {
+  input {
+    # General inputs
     File contigs_fai
-    # File pair_annotations_list
-    File bin_exclusion_mask
     String prefix
-    Int bin_size
-    # Int max_pair_distance
-    Int bins_per_shard
-    # Int pairs_for_pca
-
-    File? bin_annotations_list
-    File? bin_annotations_list_remote
-    File? bin_annotations_list_ucsc
     String? ref_build = "hg38"
     File? ref_fasta
 
+    # Bin inputs
+    File bin_exclusion_mask
+    Int bin_size
+    Int bins_per_shard
+    File? bin_annotations_list_localize
+    File? bin_annotations_list_remote
+    File? bin_annotations_list_ucsc
+    File? snv_mutrates_tsv
+    
+    # Pair inputs
+    File? pair_exclusion_mask
+    Int max_pair_distance
+    Int bins_per_pair_shard
+    # File pair_annotations_list
+    # Int pairs_for_pca
+
+    # Dockers
     String athena_docker
     String athena_cloud_docker
 
+    # Runtime overrides
     RuntimeAttr? runtime_attr_make_bins
     RuntimeAttr? runtime_attr_chrom_shard_1d
+    RuntimeAttr? runtime_attr_annotate_bins
+    RuntimeAttr? runtime_attr_merge_annotated_bins
+    RuntimeAttr? runtime_attr_make_pairs
   }
 
   Array[Array[String]] contigs = read_tsv(contigs_fai)
@@ -57,44 +72,49 @@ workflow BinAndAnnotateGenome {
   # Process each chromosome in parallel
   scatter ( contig in contigs ) {
 
-    # Shard bins from each chromosome
-    call Utils.SingleChromShard as ChromShard1D {
+    # Step 2. Annotate 1D bins per contig
+    call AnnotateBinsSingleChrom.AnnotateBinsSingleChrom as AnnotateBins {
       input:
-        infile=MakeBins.bins_bed,
-        infile_idx=MakeBins.bins_bed_idx,
+        bins=MakeBins.bins_bed,
+        bins_idx=MakeBins.bins_bed_idx,
+        bedtools_genome_file=MakeBins.bedtools_genome_file,
         contig=contig[0],
         shard_size=bins_per_shard,
         prefix=prefix,
-        file_format="bed",
+        bin_annotations_list_localize=bin_annotations_list_localize,
+        bin_annotations_list_remote=bin_annotations_list_remote,
+        bin_annotations_list_ucsc=bin_annotations_list_ucsc,
+        ref_build=ref_build,
+        ref_fasta=ref_fasta,
+        snv_mutrates_tsv=snv_mutrates_tsv,
         athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_chrom_shard_1d
+        athena_cloud_docker=athena_cloud_docker,
+        runtime_attr_chrom_shard=runtime_attr_chrom_shard_1d,
+        runtime_attr_annotate_bins=runtime_attr_annotate_bins,
+        runtime_attr_merge_annotated_bins=runtime_attr_merge_annotated_bins
     }
 
-    # Scatter over shards per chromosome
-    scatter( shard in ChromShard1D.shards ) {
-    
-      # Step 2. Annotate 1D bins per contig
-      call AnnotateBins1D {
-        input:
-          bed=shard,
-          bedtools_genome_file=ChromShard1D.bedtools_genome_file,
-          bin_annotations_list=bin_annotations_list,
-          bin_annotations_list_remote=bin_annotations_list_remote,
-          bin_annotations_list_ucsc=bin_annotations_list_ucsc,
-          ref_build=ref_build,
-          ref_fasta=ref_fasta,
-          athena_cloud_docker=athena_cloud_docker
-      }
-
-      # Step 3. Pair 2D bins and add 2D annotations
-
-      # Step 4. Uniformly sample pairs per chromosome
-
-      # (Step 5 called outside of scatter; see below)
-
-      # Step 6. Apply PCA transformation to 2D pairs
-
+    # Step 3. Pair 2D bins and add 2D annotations
+    call MakeAndAnnotatePairsSingleChrom.MakeAndAnnotatePairsSingleChrom as MakeAndAnnotatePairs {
+      input:
+        bins=AnnotateBins.annotated_bins,
+        bins_idx=AnnotateBins.annotated_bins_idx,
+        pair_exclusion_mask=pair_exclusion_mask,
+        contig=contig[0],
+        shard_size=bins_per_pair_shard,
+        max_pair_distance=max_pair_distance,
+        prefix=prefix,
+        athena_docker=athena_docker,
+        runtime_attr_chrom_shard=runtime_attr_chrom_shard,
+        runtime_attr_make_pairs=runtime_attr_make_pairs
     }
+
+    # Step 4. Uniformly sample pairs per chromosome
+
+    # (Step 5 called outside of scatter; see below)
+
+    # Step 6. Apply PCA transformation to 2D pairs
+
 
     # Step 7. Merge & sort all 2D bins per chromosome
 
@@ -163,94 +183,3 @@ task MakeBins {
   }
 }
 
-
-# Annotate a BED file of 1D bins
-task AnnotateBins1D {
-  input {
-    File bed
-    File bedtools_genome_file
-    String ref_build
-    
-    File? bin_annotations_list
-    File? bin_annotations_list_remote
-    File? bin_annotations_list_ucsc
-    File? ref_fasta
-    File? snv_mutrates_tsv
-
-    Int? query_slop = 1000
-
-    String athena_cloud_docker
-  }
-  
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 100,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command {
-    set -euo pipefail
-
-    # Prepare inputs
-    out_prefix=$( echo "~{bed}" | sed 's/\.bed\.gz//g' )
-    zcat ~{bed} \
-    | fgrep -v "#" \
-    | bedtools slop -i - -g ~{bedtools_genome_file} -b ~{query_slop} \
-    | sort -Vk1,1 -k2,2n -k3,3n \
-    | bedtools merge -i - \
-    > regions.bed
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    if [ ! -z ~{ref_fasta} ]; then
-      samtools faidx ~{ref_fasta}
-    fi
-
-    # Slice large input files hosted remotely with athena slice-remote
-    if [ ! -z ~{bin_annotations_list} ]; then
-      cat ~{bin_annotations_list} > local_tracks.tsv
-    fi
-    if [ ! -z ~{bin_annotations_list_remote} ]; then
-      if [ ! -z ${ref_fasta} ]; then
-        remote_options="--ref-fasta ~{ref_fasta}"
-      else
-        remote_options=""
-      fi
-      athena slice-remote $remote_options \
-        --updated-tsv local_slices.tsv \
-        ~{bin_annotations_list_remote} \
-        regions.bed
-      cat local_slices.tsv >> local_tracks.tsv
-    fi
-
-    # Build options for athena annotate-bins
-    athena_options=""
-    if [ ! -z local_tracks.tsv ]; then
-      athena_options="$athena_options --track-list local_tracks.tsv"
-    fi
-    if [ ! -z ~{bin_annotations_list_ucsc} ]; then
-      athena_options="$athena_options --ucsc-list ~{bin_annotations_list_ucsc}"
-    fi
-    if [ ! -z ~{ref_fasta} ]; then
-      athena_options="$athena_options --fasta ~{ref_fasta}"
-    fi
-    if [ ! -z ~{snv_mutrates_tsv} ]; then
-      athena_options="$athena_options --snv-mutrate ~{snv_mutrates_tsv}"
-    fi
-
-    # Annotate bins with athena
-    athena_cmd="athena annotate-bins --ucsc-ref ~{ref_build} $athena_options"
-    athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
-    athena_cmd="$athena_cmd ~{bed} ${out_prefix}.annotated.bed.gz"
-    echo -e "Now annotating using command:\n$athena_cmd"
-    eval $athena_cmd
-    tabix -f ${out_prefix}.annotated.bed.gz
-  }
-
-  output {
-    File annotated_bed = "*.annotated.bed.gz"
-    File annotated_bed_idx = "*.annotated.bed.gz.tbi"
-  }
-}

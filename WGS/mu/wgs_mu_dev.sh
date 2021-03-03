@@ -54,13 +54,21 @@ done
 # Make inputs .json
 cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
 {
+  "BinAndAnnotateGenome.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:latest",
+  "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:latest",
+  "BinAndAnnotateGenome.bins_per_pair_shard": 2500,
+  "BinAndAnnotateGenome.bins_per_shard": 5000,
+  "BinAndAnnotateGenome.bin_annotations_list_remote": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.tsv",
+  "BinAndAnnotateGenome.bin_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv",
   "BinAndAnnotateGenome.bin_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
-  "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
-  "BinAndAnnotateGenome.prefix": "$prefix",
   "BinAndAnnotateGenome.bin_size": 25000,
-  "BinAndAnnotateGenome.bins_per_shard": 1000,
-  "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:wgs-mu-dev",
-  "BinAndAnnotateGenome.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:wgs-mu-dev"
+  "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
+  "BinAndAnnotateGenome.max_pair_distance": 700000,
+  "BinAndAnnotateGenome.pair_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
+  "BinAndAnnotateGenome.prefix": "$prefix",
+  "BinAndAnnotateGenome.ref_build": "hg38",
+  "BinAndAnnotateGenome.ref_fasta": "gs://dsmap/data/references/hg38.fa",
+  "BinAndAnnotateGenome.snv_mutrates_tsv": "gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz"
 }
 EOF
 
@@ -105,8 +113,11 @@ gsutil -m cp \
 # Set parameters as required in BinAndAnnotateGenome.wdl
 export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
+export pair_exclusion_mask=hg38.nmask.bed.gz
 export bin_size=25000
-export bins_per_shard=1000
+export max_pair_distance=700000
+export bins_per_shard=5000
+export bins_per_pair_shard=2500
 export query_slop=1000
 export ref_fasta=hg38.fa
 export ref_build=hg38
@@ -114,7 +125,10 @@ export snv_mutrates_tsv=snv_mutation_rates.Samocha_2014.tsv.gz
 export bin_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.tsv
 export bin_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.tsv
 
-# Step 1. Create all 1D bins
+
+#####################################
+#    Step 1. Create all 1D bins     #
+#####################################
 cut -f1-2 ${contigs_fai} > contigs.genome
 export bedtools_genome_file=contigs.genome
 athena make-bins \
@@ -127,7 +141,10 @@ athena make-bins \
   ${prefix}.bins.bed.gz
 tabix -f ${prefix}.bins.bed.gz
 
-# Step 2: annotate 1D bins per contig
+
+##############################################
+#    Step 2. annotate 1D bins per contig     #
+##############################################
 # (Note: for dev. purposes, subsetting this to 1,000 bins on chr22 as 
 #  it would be handled in BinAndAnnotateGenome.wdl)
 export contig=chr22
@@ -188,5 +205,34 @@ athena_cmd="$athena_cmd ${bed} ${out_prefix}.annotated.bed.gz"
 echo -e "Now annotating using command:\n$athena_cmd"
 eval $athena_cmd
 tabix -f ${out_prefix}.annotated.bed.gz
+
+
+######################################################
+#    Step 3. Pair 2D bins and add 2D annotations     #
+######################################################
+# (Note: in WDL, entire chromosome of annotated bins would be passed to this step.
+#  For dev. purposes, we are restricting to the single shard of bins defined above)
+export all_bins="${out_prefix}.annotated.bed.gz"
+zcat $all_bins | head -n $(( $bins_per_pair_shard + 1 )) | bgzip -c > ${prefix}.query_bins.bed.gz
+tabix -f ${prefix}.query_bins.bed.gz
+export query_bins="${prefix}.query_bins.bed.gz"
+
+# Build options for athena pair-bins
+athena_options=""
+if [ ! -z ${pair_exclusion_mask} ]; then
+  athena_options="$athena_options --exclusion-list ${pair_exclusion_mask}"
+fi
+
+# Pair bins with athena
+athena_cmd="athena pair-bins --bgzip --max-dist ${max_pair_distance}"
+athena_cmd="$athena_cmd --annotate-distance --sort-features --annotate-absdiff"
+athena_cmd="$athena_cmd $athena_options --bin-superset ${all_bins}"
+athena_cmd="$athena_cmd ${query_bins} ${prefix}.pairs.bed.gz"
+echo -e "Now pairing bins using command:\n$athena_cmd"
+eval $athena_cmd
+tabix -f ${out_prefix}.pairs.bed.gz
+
+
+
 
 
