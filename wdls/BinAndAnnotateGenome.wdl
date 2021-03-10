@@ -41,8 +41,9 @@ workflow BinAndAnnotateGenome {
     File? pair_exclusion_mask
     Int max_pair_distance
     Int bins_per_pair_shard
+    File? pair_annotations_list_localize
+    File? pair_annotations_list_remote
     File? pair_annotations_list_ucsc
-    # File pair_annotations_list
     # Int pairs_for_pca
 
     # Dockers
@@ -55,6 +56,8 @@ workflow BinAndAnnotateGenome {
     RuntimeAttr? runtime_attr_annotate_bins
     RuntimeAttr? runtime_attr_merge_annotated_bins
     RuntimeAttr? runtime_attr_make_pairs
+    RuntimeAttr? runtime_attr_annotate_pairs
+    RuntimeAttr? runtime_attr_merge_annotated_pairs
   }
 
   Array[Array[String]] contigs = read_tsv(contigs_fai)
@@ -101,17 +104,24 @@ workflow BinAndAnnotateGenome {
       input:
         bins=AnnotateBins.annotated_bins,
         bins_idx=AnnotateBins.annotated_bins_idx,
+        bedtools_genome_file=MakeBins.bedtools_genome_file,
         pair_exclusion_mask=pair_exclusion_mask,
         contig=contig[0],
-        shard_size=bins_per_pair_shard,
         max_pair_distance=max_pair_distance,
+        shard_size=bins_per_pair_shard,
         prefix=prefix,
+        pair_annotations_list_localize=pair_annotations_list_localize,
+        pair_annotations_list_remote=pair_annotations_list_remote,
         pair_annotations_list_ucsc=pair_annotations_list_ucsc,
         ref_build=ref_build,
         ref_fasta=ref_fasta,
+        bin_size=bin_size,
         athena_docker=athena_docker,
+        athena_cloud_docker=athena_cloud_docker,
         runtime_attr_chrom_shard=runtime_attr_chrom_shard,
-        runtime_attr_make_pairs=runtime_attr_make_pairs
+        runtime_attr_make_pairs=runtime_attr_make_pairs,
+        runtime_attr_make_pairs=runtime_attr_annotate_pairs,
+        runtime_attr_merge_annotated_pairs=runtime_attr_merge_annotated_pairs
     }
 
     # Step 4. Uniformly sample pairs per chromosome

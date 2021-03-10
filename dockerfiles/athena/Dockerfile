@@ -32,9 +32,9 @@ RUN conda install -n dsmap -y numpy scipy pandas scikit-learn
 RUN conda install -n dsmap -y matplotlib
 RUN conda install -n dsmap -y htslib=1.11 samtools=1.11 pysam=0.16
 RUN conda install -n dsmap -y pybedtools=0.8.1 bedtools=2.30.0
+RUN conda install -n dsmap -y rapidfuzz
 RUN conda install -n dsmap -y bzip2
 RUN conda install -n dsmap -y click
-RUN pip install fuzzywuzzy[speedup]
 RUN apt-get -qqy update && \
     apt-get -qqy install --fix-missing default-libmysqlclient-dev
 RUN conda install -n dsmap -y mysqlclient

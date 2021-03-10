@@ -123,7 +123,6 @@ task AnnotateBins {
     touch empty.txt
 
     # Prepare inputs
-    out_prefix=$( basename "~{bed}" | sed 's/\.bed\.gz//g' )
     zcat ~{bed} \
     | fgrep -v "#" \
     | bedtools slop -i - -g ~{bedtools_genome_file} -b ~{query_slop} \
@@ -176,10 +175,10 @@ task AnnotateBins {
     # Annotate bins with athena
     athena_cmd="athena annotate-bins --ucsc-ref ~{ref_build} $athena_options"
     athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
-    athena_cmd="$athena_cmd ~{bed} $out_prefix.annotated.bed.gz"
+    athena_cmd="$athena_cmd ~{bed} ~{out_prefix}.annotated.bed.gz"
     echo -e "Now annotating using command:\n$athena_cmd"
     eval $athena_cmd
-    tabix -f $out_prefix.annotated.bed.gz
+    tabix -f ~{out_prefix}.annotated.bed.gz
   }
 
   output {

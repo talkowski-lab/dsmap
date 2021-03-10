@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-db052a-f527e6
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-ebf99d-65ee18
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -252,7 +252,7 @@ fi
 
 # Slice large input files hosted remotely with athena slice-remote
 if [ ! -z ${pair_annotations_list} ]; then
-  cat ${pair_annotations_list} > local_tracks.tsv
+  cat ${pair_annotations_list} > local_tracks.pairs.tsv
 fi
 if [ ! -z ${pair_annotations_list_remote} ]; then
   if [ ! -z ${ref_fasta} ]; then
@@ -261,17 +261,21 @@ if [ ! -z ${pair_annotations_list_remote} ]; then
     remote_options=""
   fi
   athena slice-remote $remote_options \
-    --updated-tsv local_slices.tsv \
+    --updated-tsv local_slices.pairs.tsv \
     ${pair_annotations_list_remote} \
     regions.bed
-  cat local_slices.tsv >> local_tracks.tsv
+  cat local_slices.pairs.tsv >> local_tracks.pairs.tsv
 fi
 
 # Build options for athena annotate-pairs
-export pairs="${prefix}.pairs.bed.gz"
+# Note: given that homology searching is computationally intensive, for local
+# testing purposes we need to downsample to ~100 pairs
+zcat ${prefix}.pairs.bed.gz | head -n101 | bgzip -c > ${prefix}.pairs.subset.bed.gz
+tabix -f ${prefix}.pairs.subset.bed.gz
+export pairs="${prefix}.pairs.subset.bed.gz"
 athena_options=""
-if [ ! -z local_tracks.tsv ]; then
-  athena_options="$athena_options --track-list local_tracks.tsv"
+if [ ! -z local_tracks.pairs.tsv ]; then
+  athena_options="$athena_options --track-list local_tracks.pairs.tsv"
 fi
 if [ ! -z ${pair_annotations_list_ucsc} ]; then
   athena_options="$athena_options --ucsc-list ${pair_annotations_list_ucsc}"
