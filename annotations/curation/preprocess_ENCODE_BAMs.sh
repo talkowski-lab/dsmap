@@ -12,7 +12,7 @@
 
 
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:latest
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-db052a-f527e6
 
 # Authenticate GCP credentials
 gcloud auth login

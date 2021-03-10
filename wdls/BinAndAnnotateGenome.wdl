@@ -26,6 +26,7 @@ workflow BinAndAnnotateGenome {
     String prefix
     String? ref_build = "hg38"
     File? ref_fasta
+    Boolean? visualize_features = false
 
     # Bin inputs
     File bin_exclusion_mask
@@ -40,6 +41,7 @@ workflow BinAndAnnotateGenome {
     File? pair_exclusion_mask
     Int max_pair_distance
     Int bins_per_pair_shard
+    File? pair_annotations_list_ucsc
     # File pair_annotations_list
     # Int pairs_for_pca
 
@@ -104,6 +106,9 @@ workflow BinAndAnnotateGenome {
         shard_size=bins_per_pair_shard,
         max_pair_distance=max_pair_distance,
         prefix=prefix,
+        pair_annotations_list_ucsc=pair_annotations_list_ucsc,
+        ref_build=ref_build,
+        ref_fasta=ref_fasta,
         athena_docker=athena_docker,
         runtime_attr_chrom_shard=runtime_attr_chrom_shard,
         runtime_attr_make_pairs=runtime_attr_make_pairs
@@ -120,7 +125,14 @@ workflow BinAndAnnotateGenome {
 
   }
 
-  # Step 5. Learn PCA transformation from sampled bins
+  # [Optional] Step 5.1. Visualize distributions of all features
+  # if visualize_features {
+  #   call VisualizeFeatures {
+  #     input:
+  #   }
+  # }
+
+  # Step 5.2. Learn PCA transformation from sampled bins
 
 }
 

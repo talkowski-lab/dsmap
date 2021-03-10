@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-045d9d-0f58ab
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-db052a-f527e6
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -61,14 +61,16 @@ cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
   "BinAndAnnotateGenome.bin_annotations_list_remote": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.tsv",
   "BinAndAnnotateGenome.bin_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv",
   "BinAndAnnotateGenome.bin_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
-  "BinAndAnnotateGenome.bin_size": 25000,
+  "BinAndAnnotateGenome.bin_size": 20000,
   "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
   "BinAndAnnotateGenome.max_pair_distance": 700000,
+  "BinAndAnnotateGenome.pair_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv",
   "BinAndAnnotateGenome.pair_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
   "BinAndAnnotateGenome.prefix": "$prefix",
   "BinAndAnnotateGenome.ref_build": "hg38",
   "BinAndAnnotateGenome.ref_fasta": "gs://dsmap/data/references/hg38.fa",
-  "BinAndAnnotateGenome.snv_mutrates_tsv": "gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz"
+  "BinAndAnnotateGenome.snv_mutrates_tsv": "gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz",
+  "BinAndAnnotateGenome.visualize_features": true
 }
 EOF
 
@@ -108,22 +110,26 @@ gsutil -m cp \
   gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.tsv \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv \
+  gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.pairs.tsv \
+  gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv \
   ./
 
 # Set parameters as required in BinAndAnnotateGenome.wdl
 export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
 export pair_exclusion_mask=hg38.nmask.bed.gz
-export bin_size=25000
+export bin_size=20000
 export max_pair_distance=700000
-export bins_per_shard=5000
-export bins_per_pair_shard=2500
+export bins_per_shard=1000
+export bins_per_pair_shard=250
 export query_slop=1000
 export ref_fasta=hg38.fa
 export ref_build=hg38
 export snv_mutrates_tsv=snv_mutation_rates.Samocha_2014.tsv.gz
 export bin_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.tsv
 export bin_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.tsv
+export pair_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.pairs.tsv
+export pair_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv
 
 
 #####################################
@@ -230,9 +236,62 @@ athena_cmd="$athena_cmd $athena_options --bin-superset ${all_bins}"
 athena_cmd="$athena_cmd ${query_bins} ${prefix}.pairs.bed.gz"
 echo -e "Now pairing bins using command:\n$athena_cmd"
 eval $athena_cmd
-tabix -f ${out_prefix}.pairs.bed.gz
+tabix -f ${prefix}.pairs.bed.gz
 
+# Prepare inputs for athena annotate-pairs
+zcat ${prefix}.pairs.bed.gz \
+| fgrep -v "#" \
+| bedtools slop -i - -g ${bedtools_genome_file} -b ${query_slop} \
+| sort -Vk1,1 -k2,2n -k3,3n \
+| bedtools merge -i - \
+> regions.bed
+export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+if [ ! -z ${ref_fasta} ]; then
+  samtools faidx ${ref_fasta}
+fi
 
+# Slice large input files hosted remotely with athena slice-remote
+if [ ! -z ${pair_annotations_list} ]; then
+  cat ${pair_annotations_list} > local_tracks.tsv
+fi
+if [ ! -z ${pair_annotations_list_remote} ]; then
+  if [ ! -z ${ref_fasta} ]; then
+    remote_options="--ref-fasta ${ref_fasta}"
+  else
+    remote_options=""
+  fi
+  athena slice-remote $remote_options \
+    --updated-tsv local_slices.tsv \
+    ${pair_annotations_list_remote} \
+    regions.bed
+  cat local_slices.tsv >> local_tracks.tsv
+fi
+
+# Build options for athena annotate-pairs
+export pairs="${prefix}.pairs.bed.gz"
+athena_options=""
+if [ ! -z local_tracks.tsv ]; then
+  athena_options="$athena_options --track-list local_tracks.tsv"
+fi
+if [ ! -z ${pair_annotations_list_ucsc} ]; then
+  athena_options="$athena_options --ucsc-list ${pair_annotations_list_ucsc}"
+fi
+if [ ! -z ${ref_build} ]; then
+  athena_options="$athena_options --ucsc-ref ${ref_build}"
+fi
+if [ ! -z ${ref_fasta} ]; then
+  athena_options="$athena_options --fasta ${ref_fasta}"
+fi
+# if [ ! -z ${bin_size} ]; then
+#   athena_options="$athena_options --binsize ${bin_size}"
+# fi
+
+# Annotate pairs with athena
+athena_cmd="athena annotate-pairs --bgzip --no-ucsc-chromsplit $athena_options"
+athena_cmd="$athena_cmd ${pairs} ${prefix}.annotated.pairs.bed.gz"
+echo -e "Now pairing bins using command:\n$athena_cmd"
+eval $athena_cmd
+tabix -f ${prefix}.annotated.pairs.bed.gz
 
 
 

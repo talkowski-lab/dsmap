@@ -26,6 +26,9 @@ workflow MakeAndAnnotatePairsSingleChrom {
     Int max_pair_distance
     Int shard_size
     String prefix
+    File? pair_annotations_list_ucsc
+    String? ref_build
+    String? ref_fasta
     Boolean sample_pairs_for_pca = true
 
     String athena_docker

@@ -21,6 +21,7 @@ workflow PreprocessExternalBAMs {
   input {
     File bam_urls_tsv
     String athena_cloud_docker
+    Boolean? check_for_prior_curation = true
 
     RuntimeAttr? runtime_attr
   }
@@ -33,6 +34,7 @@ workflow PreprocessExternalBAMs {
         bam=bam_line[0],
         prefix=bam_line[1],
         dest_bucket=bam_line[2],
+        check_for_prior_curation=check_for_prior_curation,
         athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr
     }
@@ -40,22 +42,23 @@ workflow PreprocessExternalBAMs {
 }
 
 
-# Download, index, and upload BAM to specified destination bucket
+# Download, sort, index, and upload BAM to specified destination bucket
 task CurateBam {
   input {
     String bam
     String prefix
     String dest_bucket
     String athena_cloud_docker
+    Boolean? check_for_prior_curation = true
     RuntimeAttr? runtime_attr_override
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
+    cpu_cores: 4, 
+    mem_gb: 16,
     disk_gb: 250,
     boot_disk_gb: 10,
-    preemptible_tries: 3,
+    preemptible_tries: 2,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -63,13 +66,24 @@ task CurateBam {
   command {
     set -euo pipefail
 
-    wget -O ~{prefix}.bam ~{bam}
+    index_exists=$( gsutil ls ~{dest_bucket}/~{prefix}.bam.bai | wc -l || true )
+    
+    if [ "~{check_for_prior_curation}" == "true" ] && [ "$index_exists" == "1" ]; then
+    
+      echo "SKIPPING: found that BAM index already exists at ~{dest_bucket}/~{prefix}.bam.bai" > ~{prefix}.success.txt
 
-    samtools index -b ~{prefix}.bam
+    else
 
-    gsutil -m cp ~{prefix}.bam* ~{dest_bucket}/
+      wget -nv -O - ~{bam} \
+      | samtools sort -@ 4 -m 2G -T ~{prefix}.tmpsort -O BAM -o ~{prefix}.bam -
 
-    echo "SUCCESS: uploaded to ~{dest_bucket}/~{prefix}.bam" > ~{prefix}.success.txt
+      samtools index -b ~{prefix}.bam
+
+      gsutil -m cp ~{prefix}.bam* ~{dest_bucket}/
+
+      echo "SUCCESS: uploaded to ~{dest_bucket}/~{prefix}.bam" > ~{prefix}.success.txt
+
+    fi
   }
 
   output {
