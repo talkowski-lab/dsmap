@@ -56,16 +56,20 @@ cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
 {
   "BinAndAnnotateGenome.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:latest",
   "BinAndAnnotateGenome.athena_docker": "us.gcr.io/broad-dsmap/athena:latest",
-  "BinAndAnnotateGenome.bins_per_pair_shard": 2500,
+  "BinAndAnnotateGenome.bins_per_pair_shard": 140,
   "BinAndAnnotateGenome.bins_per_shard": 5000,
   "BinAndAnnotateGenome.bin_annotations_list_remote": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.tsv",
   "BinAndAnnotateGenome.bin_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv",
   "BinAndAnnotateGenome.bin_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
   "BinAndAnnotateGenome.bin_size": 20000,
   "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
+  "BinAndAnnotateGenome.decompose_features": true,
+  "BinAndAnnotateGenome.feature_transformations_tsv": "gs://dsmap/data/dev/WGS.mu.dev.feature_transformations.tsv",
   "BinAndAnnotateGenome.max_pair_distance": 700000,
+  "BinAndAnnotateGenome.pair_annotations_list_remote": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.pairs.tsv",
   "BinAndAnnotateGenome.pair_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv",
   "BinAndAnnotateGenome.pair_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
+  "BinAndAnnotateGenome.pca_min_variance": 0.999,
   "BinAndAnnotateGenome.prefix": "$prefix",
   "BinAndAnnotateGenome.ref_build": "hg38",
   "BinAndAnnotateGenome.ref_fasta": "gs://dsmap/data/references/hg38.fa",
@@ -112,6 +116,7 @@ gsutil -m cp \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.tsv \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.pairs.tsv \
   gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv \
+  gs://dsmap/data/dev/WGS.mu.dev.feature_transformations.tsv \
   ./
 
 # Set parameters as required in BinAndAnnotateGenome.wdl
@@ -130,11 +135,14 @@ export bin_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.tsv
 export bin_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.tsv
 export pair_annotations_list_remote=WGS.mu.dev.athena_tracklist_remote.pairs.tsv
 export pair_annotations_list_ucsc=WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv
+export feature_transformations_tsv=WGS.mu.dev.feature_transformations.tsv
+export pca_min_variance=0.999
+export pairs_for_pca=10000
 
 
-#####################################
-#    Step 1. Create all 1D bins     #
-#####################################
+####################################
+#    Step 1. Create all 1D bins    #
+####################################
 cut -f1-2 ${contigs_fai} > contigs.genome
 export bedtools_genome_file=contigs.genome
 athena make-bins \
@@ -148,9 +156,20 @@ athena make-bins \
 tabix -f ${prefix}.bins.bed.gz
 
 
-##############################################
-#    Step 2. annotate 1D bins per contig     #
-##############################################
+#####################################################################################
+#    Prior to Step 2, determine number of pairs to sample per chromosome for PCA    #
+#####################################################################################
+total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ print sum }' ${contigs_fai} )
+bp_per_pair=$(( ( $total_bp + ${pairs_for_pca} - 1 ) / ${pairs_for_pca} ))
+awk -v bp_per_pair="$bp_per_pair" -v FS="\t" \
+  '{ printf "%s\t%s\t%0.0f\n", $1, $2, ($2 + bp_per_pair - 1) / bp_per_pair }' \
+  ${contigs_fai} \
+> ${prefix}.updated.fai
+
+
+#############################################
+#    Step 2. annotate 1D bins per contig    #
+#############################################
 # (Note: for dev. purposes, subsetting this to 1,000 bins on chr22 as 
 #  it would be handled in BinAndAnnotateGenome.wdl)
 export contig=chr22
@@ -213,9 +232,9 @@ eval $athena_cmd
 tabix -f ${out_prefix}.annotated.bed.gz
 
 
-######################################################
-#    Step 3. Pair 2D bins and add 2D annotations     #
-######################################################
+#####################################################
+#    Step 3. Pair 2D bins and add 2D annotations    #
+#####################################################
 # (Note: in WDL, entire chromosome of annotated bins would be passed to this step.
 #  For dev. purposes, we are restricting to the single shard of bins defined above)
 export all_bins="${out_prefix}.annotated.bed.gz"
@@ -269,8 +288,13 @@ fi
 
 # Build options for athena annotate-pairs
 # Note: given that homology searching is computationally intensive, for local
-# testing purposes we need to downsample to ~100 pairs
-zcat ${prefix}.pairs.bed.gz | head -n101 | bgzip -c > ${prefix}.pairs.subset.bed.gz
+# testing purposes we need to downsample to ~100 random pairs
+tabix -H ${prefix}.pairs.bed.gz > ${prefix}.pairs.subset.bed
+zcat ${prefix}.pairs.bed.gz | fgrep -v "#" \
+| shuf | head -n100 \
+| sort -Vrk1,1 -k2,2n -k3,3n \
+>> ${prefix}.pairs.subset.bed
+bgzip -f ${prefix}.pairs.subset.bed
 tabix -f ${prefix}.pairs.subset.bed.gz
 export pairs="${prefix}.pairs.subset.bed.gz"
 athena_options=""
@@ -294,8 +318,64 @@ fi
 athena_cmd="athena annotate-pairs --bgzip --no-ucsc-chromsplit $athena_options"
 athena_cmd="$athena_cmd ${pairs} ${prefix}.annotated.pairs.bed.gz"
 echo -e "Now pairing bins using command:\n$athena_cmd"
-eval $athena_cmd
+eval $athena_cmd 2> >(fgrep -v "is marked as paired, but its mate does not occur" >&2)
 tabix -f ${prefix}.annotated.pairs.bed.gz
+
+
+###########################################
+#    Step 4. Decompose all annotations    #
+###########################################
+# [Optional] Visualize distributions of all features prior to PCA
+mkdir ${prefix}_feature_hists
+athena feature-hists \
+  --ignore-columns 3 \
+  --transformations-tsv ${feature_transformations_tsv} \
+  ${prefix}.annotated.pairs.bed.gz \
+  ${prefix}_feature_hists/${prefix}
+
+# Learn PCA transformation from subsampled data
+# Note: for local dev purposes, we are just using the output from annotate-pairs, above
+# In practice, we would semi-randomly sample pairs from every chromosome and learn
+# PCA transformation on those bins
+athena eigen-bins \
+  -o ${prefix}.annotated.pairs.eigen_train.bed.gz \
+  --parameters-outfile ${prefix}.pca_model.pickle \
+  --min-variance ${pca_min_variance} \
+  --transformations-tsv ${feature_transformations_tsv} \
+  --whiten \
+  --fill-missing mean \
+  --max-components 1000 \
+  --stats ${prefix}.pca_stats.txt \
+  --bgzip \
+  ${prefix}.annotated.pairs.bed.gz
+
+
+########################################
+#    Step 5. Apply PCA to all pairs    #
+########################################
+# Note: for local dev purposes, we are reapplying the same model from step 4
+# to the same pairs from step 4. In practice, this model would be applied to all
+# bins, including those not used in PCA fitting
+athena eigen-bins \
+  -o ${prefix}.annotated.pairs.eigen.bed.gz \
+  --precomputed-parameters ${prefix}.pca_model.pickle \
+  --bgzip \
+  ${prefix}.annotated.pairs.bed.gz
+
+# For local dev purposes only, can confirm that the trained model .pickle was applied
+# correctly by checking for any differences between -o outputs from Steps 4 & 5
+# (Note that in practice we do not need to generate the -o output at Step 4)
+diff ${prefix}.annotated.pairs.eigen_train.bed.gz ${prefix}.annotated.pairs.eigen.bed.gz
+
+# For local dev purposes, we can visualize the decomposed features to assess their scaling
+if ! [ -e ${prefix}_feature_hists ]; then
+  mkdir ${prefix}_feature_hists
+fi
+athena feature-hists \
+  --ignore-columns 3 \
+  ${prefix}.annotated.pairs.eigen.bed.gz \
+  ${prefix}_feature_hists/${prefix}.decomped
+
 
 
 

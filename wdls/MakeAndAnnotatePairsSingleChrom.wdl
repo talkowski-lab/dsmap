@@ -36,6 +36,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
     Int? bin_size
 
     Boolean sample_pairs_for_pca = true
+    Int? pairs_to_sample_for_pca
 
     String athena_docker
     String athena_cloud_docker
@@ -43,6 +44,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
     RuntimeAttr? runtime_attr_chrom_shard
     RuntimeAttr? runtime_attr_make_pairs
     RuntimeAttr? runtime_attr_annotate_pairs
+    RuntimeAttr? runtime_attr_sample_pairs
     RuntimeAttr? runtime_attr_merge_annotated_pairs
   }
 
@@ -57,6 +59,12 @@ workflow MakeAndAnnotatePairsSingleChrom {
       file_format="bed",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_chrom_shard
+  }
+
+  # Determine number of pairs to sample per shard
+  Int pairs_to_sample_per_shard = 0
+  if ( sample_pairs_for_pca ) {
+    Int pairs_to_sample_per_shard = ceil( length(ChromShard.shards) / pairs_to_sample_for_pca )
   }
 
   # Scatter over sharded bins for pairing & annotation
@@ -90,6 +98,16 @@ workflow MakeAndAnnotatePairsSingleChrom {
     }
 
     # Sample N random pairs per shard for feature PCA, if optioned
+    if ( sample_pairs_for_pca ) {
+      call SamplePairs {
+        input:
+          annotated_pairs=AnnotatePairs.annotated_pairs,
+          annotated_pairs_idx=AnnotatePairs.annotated_pairs_idx,
+          sample_size=pairs_to_sample_per_shard,
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_merge_annotated_pairs
+      }
+    }
   }
 
   # Merge all pairs
@@ -102,10 +120,21 @@ workflow MakeAndAnnotatePairsSingleChrom {
   }
 
   # Merge sampled pairs per shard for PCA, if optioned
+  if ( sample_pairs_for_pca ) {
+    call Utils.MergeBEDs as MergeSampledPairs {
+      input:
+        beds=select_all(SamplePairs.sampled_pairs),
+        prefix="~{prefix}.downsampled_pairs.~{contig}",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_merge_annotated_pairs
+    }
+  }
 
   output {
     File annotated_pairs = MergeAnnotatedPairs.merged_bed
     File annotated_pairs_idx = MergeAnnotatedPairs.merged_bed_idx
+    File? downsampled_pairs = MergeSampledPairs.merged_bed
+    File? downsampled_pairs_idx = MergeSampledPairs.merged_bed_idx
   }
 }
 
@@ -183,7 +212,7 @@ task AnnotatePairs {
     File? pair_annotations_list_remote
     File? pair_annotations_list_ucsc
     String? ref_build
-    String? ref_fasta
+    File? ref_fasta
     Int? bin_size
 
     Int? query_slop = 1000
@@ -266,7 +295,7 @@ task AnnotatePairs {
     athena_cmd="athena annotate-pairs --bgzip --no-ucsc-chromsplit $athena_options"
     athena_cmd="$athena_cmd ~{pairs} ~{out_prefix}.annotated.pairs.bed.gz"
     echo -e "Now pairing bins using command:\n$athena_cmd"
-    eval $athena_cmd
+    eval $athena_cmd 2> >(fgrep -v "is marked as paired, but its mate does not occur" >&2)
     tabix -f ~{out_prefix}.annotated.pairs.bed.gz
   }
 
@@ -286,3 +315,57 @@ task AnnotatePairs {
   }
 }
 
+
+# Randomly sample a subset of pairs from a BED for PCA in parent workflow
+task SamplePairs {
+  input {
+    File annotated_pairs
+    File annotated_pairs_idx
+    Int? sample_size
+    
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String out_prefix = basename(annotated_pairs, ".bed.gz")
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3,
+    disk_gb: 50,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    tabix -H ~{annotated_pairs} > header.bed
+
+    zcat ~{annotated_pairs} | grep -ve '^#' \
+    | shuf -n ~{sample_size} --random-source=<( zcat ~{annotated_pairs} ) \
+    | sort -Vk1,1 -k2,2n -k3,3n \
+    | cat header.bed - \
+    | bgzip -c \
+    > ~{out_prefix}.downsampled.bed.gz
+    tabix -f ~{out_prefix}.downsampled.bed.gz
+  }
+
+  output {
+    File sampled_pairs = "~{out_prefix}.downsampled.bed.gz"
+    File sampled_pairs_idx = "~{out_prefix}.downsampled.bed.gz.tbi"
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
