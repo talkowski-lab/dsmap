@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-ebf99d-65ee18
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-bb809b-33aeba
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -66,6 +66,9 @@ cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
   "BinAndAnnotateGenome.decompose_features": true,
   "BinAndAnnotateGenome.feature_transformations_tsv": "gs://dsmap/data/dev/WGS.mu.dev.feature_transformations.tsv",
   "BinAndAnnotateGenome.max_pair_distance": 700000,
+  "BinAndAnnotateGenome.max_pcs": 1000,
+  "BinAndAnnotateGenome.pairs_for_pca": 100000,
+  "BinAndAnnotateGenome.pairs_per_shard_apply_pca": 50000,
   "BinAndAnnotateGenome.pair_annotations_list_remote": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_remote.pairs.tsv",
   "BinAndAnnotateGenome.pair_annotations_list_ucsc": "gs://dsmap/data/dev/WGS.mu.dev.athena_tracklist_ucsc.pairs.tsv",
   "BinAndAnnotateGenome.pair_exclusion_mask": "gs://dsmap/data/references/hg38.nmask.bed.gz",
@@ -74,7 +77,7 @@ cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
   "BinAndAnnotateGenome.ref_build": "hg38",
   "BinAndAnnotateGenome.ref_fasta": "gs://dsmap/data/references/hg38.fa",
   "BinAndAnnotateGenome.snv_mutrates_tsv": "gs://dsmap/data/resources/snv_mutation_rates.Samocha_2014.tsv.gz",
-  "BinAndAnnotateGenome.visualize_features": true
+  "BinAndAnnotateGenome.visualize_features_before_pca": true
 }
 EOF
 
@@ -101,6 +104,12 @@ cd -
 cromshell -t 20 metadata \
   $( cat /cromwell/logs/$prefix.BinAndAnnotateGenome.log | tail -n1 | jq .id | tr -d '"' ) \
 | jq .status
+
+# Move all final outputs to dsmap gs:// bucket for permanent storage
+cromshell -t 20 metadata \
+  $( cat /cromwell/logs/$prefix.BinAndAnnotateGenome.log | tail -n1 | jq .id | tr -d '"' ) \
+| jq .outputs | sed 's/\"/\n/g' | fgrep "gs://" \
+| gsutil -m cp -I gs://dsmap/data/dev/$prefix.BinAndAnnotateGenome/
 
 
 ##########################################################

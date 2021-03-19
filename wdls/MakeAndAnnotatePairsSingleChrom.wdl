@@ -36,7 +36,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
     Int? bin_size
 
     Boolean sample_pairs_for_pca = true
-    Int? pairs_to_sample_for_pca
+    Int? pairs_to_sample_for_pca = 0
 
     String athena_docker
     String athena_cloud_docker
@@ -59,12 +59,6 @@ workflow MakeAndAnnotatePairsSingleChrom {
       file_format="bed",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_chrom_shard
-  }
-
-  # Determine number of pairs to sample per shard
-  Int pairs_to_sample_per_shard = 0
-  if ( sample_pairs_for_pca ) {
-    Int pairs_to_sample_per_shard = ceil( length(ChromShard.shards) / pairs_to_sample_for_pca )
   }
 
   # Scatter over sharded bins for pairing & annotation
@@ -96,18 +90,6 @@ workflow MakeAndAnnotatePairsSingleChrom {
         athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr_annotate_pairs
     }
-
-    # Sample N random pairs per shard for feature PCA, if optioned
-    if ( sample_pairs_for_pca ) {
-      call SamplePairs {
-        input:
-          annotated_pairs=AnnotatePairs.annotated_pairs,
-          annotated_pairs_idx=AnnotatePairs.annotated_pairs_idx,
-          sample_size=pairs_to_sample_per_shard,
-          athena_docker=athena_docker,
-          runtime_attr_override=runtime_attr_merge_annotated_pairs
-      }
-    }
   }
 
   # Merge all pairs
@@ -119,22 +101,28 @@ workflow MakeAndAnnotatePairsSingleChrom {
       runtime_attr_override=runtime_attr_merge_annotated_pairs
   }
 
-  # Merge sampled pairs per shard for PCA, if optioned
+
+  # Sample N random pairs for feature PCA, if optioned
   if ( sample_pairs_for_pca ) {
-    call Utils.MergeBEDs as MergeSampledPairs {
+    call SamplePairs {
       input:
-        beds=select_all(SamplePairs.sampled_pairs),
-        prefix="~{prefix}.downsampled_pairs.~{contig}",
+        annotated_pairs=MergeAnnotatedPairs.merged_bed,
+        annotated_pairs_idx=MergeAnnotatedPairs.merged_bed_idx,
+        sample_size=pairs_to_sample_for_pca,
         athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_merge_annotated_pairs
+        runtime_attr_override=runtime_attr_sample_pairs
     }
   }
 
+
   output {
+
     File annotated_pairs = MergeAnnotatedPairs.merged_bed
     File annotated_pairs_idx = MergeAnnotatedPairs.merged_bed_idx
-    File? downsampled_pairs = MergeSampledPairs.merged_bed
-    File? downsampled_pairs_idx = MergeSampledPairs.merged_bed_idx
+
+    File? downsampled_pairs = SamplePairs.sampled_pairs
+    File? downsampled_pairs_idx = SamplePairs.sampled_pairs_idx
+    
   }
 }
 

@@ -85,7 +85,6 @@ workflow BinAndAnnotateGenome {
   }
 
   # Prior to parallelizing per chromosome, must determine number of pairs to sample
-  Array[Array[String]] contigs = read_tsv(contigs_fai)
   if ( decompose_features ) { 
     call CalcPairsPerChrom {
       input:
@@ -94,8 +93,9 @@ workflow BinAndAnnotateGenome {
         prefix=prefix,
         athena_docker=athena_docker
     }
-    Array[Array[String]] contigs = read_tsv(CalcPairsPerChrom.updated_fai)
   }
+
+  Array[Array[String]] contigs = read_tsv(select_first([CalcPairsPerChrom.updated_fai, contigs_fai]))
 
   # Process each chromosome in parallel
   scatter ( contig in contigs ) {
@@ -166,7 +166,7 @@ workflow BinAndAnnotateGenome {
 
     # [Optional] Step 4.2. Visualize distributions of all features prior to PCA
     if ( visualize_features_before_pca ) {
-      call Utils.VisualizeFeatures {
+      call Utils.VisualizeFeatures as VisualizeFeatures {
         input:
           bed=MergePCAPairs.merged_bed,
           transformations_tsv=feature_transformations_tsv,
@@ -209,7 +209,7 @@ workflow BinAndAnnotateGenome {
           pca_model=LearnPCA.pca_model,
           contig=contig,
           shard_size=pairs_per_shard_apply_pca,
-          prefix="~{prefix}.pairs.eigen.~{contig_inputs[1][0]}",
+          prefix="~{prefix}.pairs",
           athena_docker=athena_docker,
           runtime_attr_chrom_shard=runtime_attr_chrom_shard,
           runtime_attr_apply_pca=runtime_attr_apply_pca,
@@ -219,10 +219,17 @@ workflow BinAndAnnotateGenome {
   }
 
   output {
+
     Array[File] annotated_pairs = MakeAndAnnotatePairs.annotated_pairs
     Array[File] annotated_pairs_idx = MakeAndAnnotatePairs.annotated_pairs_idx
+
     Array[File]? decomped_pairs = DecompAnnosPerChrom.decomped_bed
     Array[File]? decomped_pairs_idx = DecompAnnosPerChrom.decomped_bed_idx
+
+    File? feature_distribs_pre_pca = VisualizeFeatures.feature_hists
+
+    File? eigenfeature_stats = LearnPCA.pc_stats
+
   }
 }
 
@@ -366,10 +373,10 @@ task LearnPCA {
       athena_options="$athena_options --max-components ~{max_pcs}"
     fi
 
-    # Visualize features with athena
+    # Learn PCA transformation with athena
     athena_cmd="athena eigen-bins $athena_options --bgzip"
     athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pickle"
-    athena_cmd="$athena_cmd --fill-missing mean"
+    athena_cmd="$athena_cmd --whiten --fill-missing mean"
     athena_cmd="$athena_cmd --stats ~{prefix}.pca_stats.txt ~{sampled_pairs}"
     echo -e "Now learning PCA decomposition using command:\n$athena_cmd"
     eval $athena_cmd
