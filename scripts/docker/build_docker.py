@@ -50,9 +50,12 @@ def parse_commandline_args():
     build_args_group = parser.add_argument_group('Build options', 'Options when building images')
     required_args_group.add_argument('-t', '--tag', type=str, default="latest",
                                      help="Tag applied to all images.")
-    build_args_group.add_argument('-i', '--images', nargs='+', type=str, default='All',
-                                  choices=['All'] + ordered_dockers, 
-                                  help='Specify which images to build [default: All]')
+    required_args_group.add_argument('--add-hashes-to-tag', action='store_true',
+                                     help="Suffix image tags with first six characters " +
+                                     "of GitHub hashes.")
+    build_args_group.add_argument('-i', '--images', nargs='+', type=str, default='all',
+                                  choices=['all'] + ordered_dockers, 
+                                  help='Specify which images to build [default: all]')
 
     # GitHub args
     github_args_group = parser.add_argument_group('GitHub options', 'Options for GitHub repos')
@@ -217,7 +220,7 @@ def main():
     dsmap_dir = '/'.join(os.path.dirname(os.path.realpath(__file__)).split('/')[:-2])
 
     # Determine which images to build
-    if 'All' in args.images:
+    if 'all' in args.images:
         dockers_to_build = ordered_dockers
     else:
         dockers_to_build = [a for a in ordered_dockers if a in args.images]
@@ -226,9 +229,16 @@ def main():
     print('\nBuilding the following Docker images:\n')
     for docker in dockers_to_build:
         print('  - {}:{}\n'.format(docker, args.tag))
-    build_info = {d : {'dockerfile_dir' : '{}/dockerfiles/{}'.format(dsmap_dir, d),
-                       'remote' : 'us.gcr.io/{}/{}:{}'.format(args.gcr_project, d, args.tag)} \
-                  for d in dockers_to_build}
+    if args.add_hashes_to_tag:
+        build_info = {d : {'dockerfile_dir' : '{}/dockerfiles/{}'.format(dsmap_dir, d),
+                           'remote' : 'us.gcr.io/{}/{}:{}-{}-{}'.format(args.gcr_project, d, args.tag, 
+                                                                        args.athena_hash[:6], 
+                                                                        args.dsmap_hash[:6])} \
+                      for d in dockers_to_build}
+    else:
+        build_info = {d : {'dockerfile_dir' : '{}/dockerfiles/{}'.format(dsmap_dir, d),
+                           'remote' : 'us.gcr.io/{}/{}:{}'.format(args.gcr_project, d, args.tag)} \
+                      for d in dockers_to_build}        
 
     # Create temporary directory to use as build context
     try:

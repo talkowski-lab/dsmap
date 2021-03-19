@@ -10,7 +10,7 @@ Docker images included in this script are:
 Example usage to rebuild all Docker images using most recent repo commits:
 ```
 ./build_docker.py \
-	--images All \
+	--images all \
 	--tag "my_new_image" \
 	--gcr-project broad-dsmap \
 	--update-latest
