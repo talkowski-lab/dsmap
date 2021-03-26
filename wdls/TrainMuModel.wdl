@@ -41,7 +41,7 @@ workflow TrainMuModel {
   scatter ( contig in contigs ) {
 
     # Infer pairs BED file path
-    String pairs_filename = if defined(pairs_bed_prefix) then pairs_bed_prefix else prefix + ".pairs.eigen"
+    String pairs_filename = select_first([pairs_bed_prefix, prefix + ".pairs.eigen"])
     File pairs_bed = pairs_bucket + "/" + pairs_filename + "." + contig + ".bed.gz" 
     File pairs_bed_idx = pairs_bed + ".bed.gz.tbi" 
 

@@ -26,18 +26,78 @@ gcloud auth application-default login
 # Set global parameters
 export cohort="HGSV"
 export tech="WGS"
-export cnv="DEL"
-export vcf="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.wCI.vcf.gz"
-export vcf_idx="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.wCI.vcf.gz.tbi"
 export main_prefix="${cohort}.${tech}.dev"
 
+# Prep Cromwell directory structure
+mkdir cromwell
+for subdir in logs outputs inputs; do
+  mkdir cromwell/$subdir
+done
+
+########################################################
+#    Train mutation rate model - one-shot workflow     #
+########################################################
+# Must run once for each CNV type
+for cnv in DEL DUP; do
+  # Make inputs .json
+  cat <<EOF > cromwell/inputs/$main_prefix.TrainMuModel.$cnv.input.json
+{
+  "TrainMuModel.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:latest",
+  "TrainMuModel.cnv": "$cnv",
+  "TrainMuModel.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
+  "TrainMuModel.pairs_bed_prefix": "$main_prefix.pairs.eigen",
+  "TrainMuModel.pairs_bucket": "gs://dsmap/data/dev/$main_prefix.BinAndAnnotateGenome",
+  "TrainMuModel.prefix": "$main_prefix",
+  "TrainMuModel.vcf": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz",
+  "TrainMuModel.vcf_idx": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz"
+}
+EOF
+
+  # Make dependencies .zip
+  if [ -e dsmap.dependencies.zip ]; then
+    rm dsmap.dependencies.zip
+  fi
+  cd /opt/dsmap/wdls/ && \
+  zip dsmap.dependencies.zip *wdl && \
+  mv dsmap.dependencies.zip / && \
+  cd -
+
+  # Submit to cromwell
+  cd /opt/dsmap && \
+  cromshell -t 20 submit \
+    wdls/TrainMuModel.wdl \
+    /cromwell/inputs/$main_prefix.TrainMuModel.$cnv.input.json \
+    cromwell/dsmap.cromwell_options.json \
+    /dsmap.dependencies.zip \
+  > /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log && \
+  cd -
+done
+
+# Check status
+for cnv in del dup; do
+  cromshell -t 20 metadata \
+    $( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' ) \
+  | jq .status
+done
+
+# TODO: Move all final outputs to dsmap gs:// bucket for permanent storage
+cromshell -t 20 metadata \
+  $( cat /cromwell/logs/$main_prefix.TrainMuModel.log | tail -n1 | jq .id | tr -d '"' ) \
+| jq .outputs | sed 's/\"/\n/g' | fgrep "gs://" \
+| gsutil -m cp -I gs://dsmap/data/dev/$main_prefix.TrainMuModel/
+
+
 
 ############################################################
-#    Build mutation rate model - step by step, locally     #
+#    Train mutation rate model - step by step, locally     #
 ############################################################
 # Note: in practice, this will be conducted in parallel for all contigs in master
-# workflow, but for local dev purposes we are restricting to a single contig
+# workflow, and will be launched once each for deletions and duplications, but 
+# for local dev purposes we are restricting to deletions from a single contig
 export contig="chr22"
+export cnv="DEL"
+export vcf="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz"
+export vcf_idx="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz.tbi"
 
 # Download necessary inputs to TrainMuModel.wdl
 gsutil -m cp \
