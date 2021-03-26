@@ -2,6 +2,8 @@
 
 | Directory | Description |  
 | :--- | :--- |  
+| [`annotations/`](https://github.com/talkowski-lab/dsmap/tree/main/data/annotations) | Genome annotation datasets |  
+| [`athena/`](https://github.com/talkowski-lab/dsmap/tree/main/data/dev) | Reference files for athena commands |  
 | [`dev/`](https://github.com/talkowski-lab/dsmap/tree/main/data/dev) | Data used during model development |  
 | [`resources/`](https://github.com/talkowski-lab/dsmap/tree/main/data/resources) | Resource datasets |  
 | [`references/`](https://github.com/talkowski-lab/dsmap/tree/main/data/references) | Reference datasets |  
