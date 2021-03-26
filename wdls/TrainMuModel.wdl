@@ -43,7 +43,7 @@ workflow TrainMuModel {
     # Infer pairs BED file path
     String pairs_filename = select_first([pairs_bed_prefix, prefix + ".pairs.eigen"])
     File pairs_bed = pairs_bucket + "/" + pairs_filename + "." + contig + ".bed.gz" 
-    File pairs_bed_idx = pairs_bed + ".bed.gz.tbi" 
+    File pairs_bed_idx = pairs_bed + ".tbi" 
 
     # Step 1. Intersect CNVs with bin-pairs
     call IntersectSVs {
@@ -61,6 +61,7 @@ workflow TrainMuModel {
 }
 
 
+# Intersect SV breakpoints vs 2D bin-pairs for a single chromosome
 task IntersectSVs {
   input {
     String vcf #VCF passed as string to allow for remote tabixing without localizing entire VCF
@@ -90,20 +91,21 @@ task IntersectSVs {
 
     # Localize variants from contig
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    tabix -h $vcf $contig | bgzip -c > ~{prefix}.$contig.svs.vcf.gz
+    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{prefix}.~{contig}.svs.vcf.gz
 
     # Intersect variants and pairs with athena
     athena_cmd="athena count-sv --bin-format 2D --comparison breakpoint"
     athena_cmd="$athena_cmd --probabilities --bgzip ~{pairs_bed}"
-    athena_cmd="$athena_cmd ~{prefix}.$contig.svs.vcf.gz ~{prefix}.pairs_wCounts.bed.gz"
+    athena_cmd="$athena_cmd ~{prefix}.~{contig}.svs.vcf.gz"
+    athena_cmd="$athena_cmd ~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
     eval $athena_cmd
-    tabix -f ~{prefix}.pairs_wCounts.bed.gz
+    tabix -f ~{prefix}.pairs.wCounts.~{contig}.bed.gz
   }
 
   output {
-    File pairs_w_counts = "~{prefix}.pairs_wCounts.bed.gz"
-    File pairs_w_counts_idx = "~{prefix}.pairs_wCounts.bed.gz.tbi"
+    File pairs_w_counts = "~{prefix}.pairs.wCounts.~{contig}.bed.gz"
+    File pairs_w_counts_idx = "~{prefix}.pairs.wCounts.~{contig}.bed.gz.tbi"
   }
   
   runtime {

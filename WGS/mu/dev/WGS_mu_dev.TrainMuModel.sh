@@ -37,6 +37,15 @@ done
 ########################################################
 #    Train mutation rate model - one-shot workflow     #
 ########################################################
+# Make dependencies .zip
+if [ -e dsmap.dependencies.zip ]; then
+  rm dsmap.dependencies.zip
+fi
+cd /opt/dsmap/wdls/ && \
+zip dsmap.dependencies.zip *wdl && \
+mv dsmap.dependencies.zip / && \
+cd -
+
 # Must run once for each CNV type
 for cnv in DEL DUP; do
   # Make inputs .json
@@ -53,15 +62,6 @@ for cnv in DEL DUP; do
 }
 EOF
 
-  # Make dependencies .zip
-  if [ -e dsmap.dependencies.zip ]; then
-    rm dsmap.dependencies.zip
-  fi
-  cd /opt/dsmap/wdls/ && \
-  zip dsmap.dependencies.zip *wdl && \
-  mv dsmap.dependencies.zip / && \
-  cd -
-
   # Submit to cromwell
   cd /opt/dsmap && \
   cromshell -t 20 submit \
@@ -74,17 +74,26 @@ EOF
 done
 
 # Check status
-for cnv in del dup; do
+for cnv in DEL DUP; do
   cromshell -t 20 metadata \
     $( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' ) \
   | jq .status
 done
 
+# Sanity check: count the number of bins with SVs per chromosome
+gsutil -m cp gs://dsmap/data/dev/hg38.contigs.dev.fai ./
+for cnv in DEL DUP; do
+  bucket=$( cromshell -t 20 metadata \
+              $( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' ) \
+            | jq .workflowRoot | tr -d '"' )
+  while read shard contig; do
+    echo -e "\n\n__$cnv on ${contig}__"
+    gsutil -m cat ${bucket}call-IntersectSVs/shard-$shard/HGSV.WGS.dev.$cnv.pairs_wCounts.bed.gz \
+    | gunzip -c | sed '1d' | cut -f4 | sort -n | uniq -c
+  done < <( awk -v OFS="\t" '{ print NR-1, $1 }' hg38.contigs.dev.fai )
+done
+
 # TODO: Move all final outputs to dsmap gs:// bucket for permanent storage
-cromshell -t 20 metadata \
-  $( cat /cromwell/logs/$main_prefix.TrainMuModel.log | tail -n1 | jq .id | tr -d '"' ) \
-| jq .outputs | sed 's/\"/\n/g' | fgrep "gs://" \
-| gsutil -m cp -I gs://dsmap/data/dev/$main_prefix.TrainMuModel/
 
 
 
@@ -127,8 +136,8 @@ athena count-sv \
   --bgzip \
   $pairs_bed \
   $prefix.$contig.svs.vcf.gz \
-  $prefix.pairs_wCounts.bed.gz
-tabix -f $prefix.pairs_wCounts.bed.gz
+  $prefix.$pairs.wCounts.contig.bed.gz
+tabix -f $prefix.$pairs.wCounts.contig.bed.gz
 
 
 
