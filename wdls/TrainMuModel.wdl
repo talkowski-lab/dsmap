@@ -90,13 +90,21 @@ task IntersectSVs {
 
     # Localize variants from contig
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    tabix -h $vcf $contig | bgzip -c > $prefix.$contig.vcf.gz
+    tabix -h $vcf $contig | bgzip -c > ~{prefix}.$contig.svs.vcf.gz
 
-    
-
+    # Intersect variants and pairs with athena
+    athena_cmd="athena count-sv --bin-format 2D --comparison breakpoint"
+    athena_cmd="$athena_cmd --probabilities --bgzip ~{pairs_bed}"
+    athena_cmd="$athena_cmd ~{prefix}.$contig.svs.vcf.gz ~{prefix}.pairs_wCounts.bed.gz"
+    echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
+    eval $athena_cmd
+    tabix -f ~{prefix}.pairs_wCounts.bed.gz
   }
 
-  output {}
+  output {
+    File pairs_w_counts = "~{prefix}.pairs_wCounts.bed.gz"
+    File pairs_w_counts_idx = "~{prefix}.pairs_wCounts.bed.gz.tbi"
+  }
   
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

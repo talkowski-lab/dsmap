@@ -57,7 +57,7 @@ export prefix="$main_prefix.$cnv"
 
 # Localize variants from contig
 export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-tabix -h $vcf $contig | bgzip -c > $prefix.$contig.vcf.gz
+tabix -h $vcf $contig | bgzip -c > $prefix.$contig.svs.vcf.gz
 
 # Intersect variants with pairs
 athena count-sv \
@@ -66,8 +66,9 @@ athena count-sv \
   --probabilities \
   --bgzip \
   $pairs_bed \
-  $prefix.$contig.vcf.gz \
-  $prefix.bed.gz
+  $prefix.$contig.svs.vcf.gz \
+  $prefix.pairs_wCounts.bed.gz
+tabix -f $prefix.pairs_wCounts.bed.gz
 
 
 
