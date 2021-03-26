@@ -9,6 +9,7 @@
 # Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
 
 # Development code for prototype WGS mutation rate model
+# Genome binning and annotation
 
 
 ###############
@@ -35,9 +36,9 @@ for subdir in logs outputs inputs; do
 done
 
 
-#############################
-#    Prep training data     #
-#############################
+########################################
+#    Get distributions of CNV data     #
+########################################
 # Download filtered HGSV VCFs
 gsutil -m cp gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.*.sites.vcf.gz* ./
 

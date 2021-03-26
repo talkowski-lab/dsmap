@@ -72,7 +72,6 @@ workflow BinAndAnnotateGenome {
     RuntimeAttr? runtime_attr_apply_pca
   }
 
-
   # Step 1. Create all 1D bins
   call MakeBins {
     input:
