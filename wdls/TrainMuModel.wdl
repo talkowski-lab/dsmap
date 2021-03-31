@@ -25,6 +25,7 @@ workflow TrainMuModel {
     String pairs_bucket
     String? pairs_bed_prefix
     File contigs_fai
+    File training_mask
     String prefix
     String cnv
 
@@ -33,6 +34,7 @@ workflow TrainMuModel {
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_intersect_svs
+    RuntimeAttr? runtime_attr_apply_training_mask
   }
 
   Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
@@ -56,6 +58,14 @@ workflow TrainMuModel {
         prefix="~{prefix}.~{cnv}",
         athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr_intersect_svs
+    }
+
+    # Step 2. Apply training mask
+    call Utils.ApplyExclusionBED as ApplyTrainingMask {
+      input:
+        inbed=IntersectSVs.pairs_w_counts,
+        exbed=training_mask,
+        prefix=basename(IntersectSVs.pairs_w_counts, ".bed.gz") + ".training"
     }
   }
 }

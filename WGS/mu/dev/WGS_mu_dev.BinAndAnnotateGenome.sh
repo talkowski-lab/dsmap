@@ -16,7 +16,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-bb809b-33aeba
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-7411a1-722506
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -66,7 +66,7 @@ cat <<EOF > cromwell/inputs/$prefix.BinAndAnnotateGenome.input.json
   "BinAndAnnotateGenome.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
   "BinAndAnnotateGenome.decompose_features": true,
   "BinAndAnnotateGenome.feature_transformations_tsv": "gs://dsmap/data/dev/WGS.mu.dev.feature_transformations.tsv",
-  "BinAndAnnotateGenome.max_pair_distance": 700000,
+  "BinAndAnnotateGenome.max_pair_distance": 600000,
   "BinAndAnnotateGenome.max_pcs": 1000,
   "BinAndAnnotateGenome.pairs_for_pca": 100000,
   "BinAndAnnotateGenome.pairs_per_shard_apply_pca": 50000,
@@ -134,7 +134,7 @@ export contigs_fai=hg38.contigs.dev.fai
 export bin_exclusion_mask=hg38.nmask.bed.gz
 export pair_exclusion_mask=hg38.nmask.bed.gz
 export bin_size=20000
-export max_pair_distance=700000
+export max_pair_distance=600000
 export bins_per_shard=1000
 export bins_per_pair_shard=250
 export query_slop=1000

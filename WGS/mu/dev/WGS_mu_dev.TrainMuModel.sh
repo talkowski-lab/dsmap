@@ -57,6 +57,7 @@ for cnv in DEL DUP; do
   "TrainMuModel.pairs_bed_prefix": "$main_prefix.pairs.eigen",
   "TrainMuModel.pairs_bucket": "gs://dsmap/data/dev/$main_prefix.BinAndAnnotateGenome",
   "TrainMuModel.prefix": "$main_prefix",
+  "TrainMuModel.training_mask": "gs://dsmap/data/athena/athena.hg38.training_exclusion.bed.gz",
   "TrainMuModel.vcf": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz",
   "TrainMuModel.vcf_idx": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz"
 }
@@ -107,11 +108,13 @@ export contig="chr22"
 export cnv="DEL"
 export vcf="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz"
 export vcf_idx="gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz.tbi"
+export training_mask="athena.hg38.training_exclusion.bed.gz"
 
 # Download necessary inputs to TrainMuModel.wdl
 gsutil -m cp \
   gs://dsmap/data/dev/$main_prefix.BinAndAnnotateGenome/$main_prefix.pairs.eigen.$contig.bed.gz* \
   $vcf_idx \
+  gs://dsmap/data/athena/athena.hg38.training_exclusion.bed.gz \
   ./
 
 
@@ -136,8 +139,27 @@ athena count-sv \
   --bgzip \
   $pairs_bed \
   $prefix.$contig.svs.vcf.gz \
-  $prefix.$pairs.wCounts.contig.bed.gz
-tabix -f $prefix.$pairs.wCounts.contig.bed.gz
+  $prefix.pairs.wCounts.$contig.bed.gz
+tabix -f $prefix.pairs.wCounts.$contig.bed.gz
+
+
+######################################
+#    Step 2. Apply training mask     #
+######################################
+# Set parameters as required for ApplyExclusionBED task in WDL
+export inbed=$prefix.pairs.wCounts.$contig.bed.gz
+export exbed=$training_mask
+export prefix="$prefix.pairs.wCounts.$contig.training"
+
+# Apply training mask to extract bins for training
+bedtools intersect -v -header -wa \
+  -a $inbed \
+  -b $exbed \
+| bgzip -c \
+> $prefix.bed.gz
+tabix -f $prefix.bed.gz
+
+
 
 
 

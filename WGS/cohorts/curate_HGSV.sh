@@ -15,7 +15,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:hgsv-wgs-curation
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-7411a1-722506
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -168,7 +168,7 @@ for CNV in DEL DUP; do
     --af-field POPMAX_AF \
     --minAC 1 \
     --minAN 2331 \
-    --minQUAL 100 \
+    --minQUAL 2 \
     --pHWE 0.01 \
     --bgzip \
     $prefix.wAFs.sites.vcf.gz \
