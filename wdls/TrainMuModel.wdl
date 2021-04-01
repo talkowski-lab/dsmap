@@ -29,12 +29,18 @@ workflow TrainMuModel {
     String prefix
     String cnv
 
+    # Diagnostics options
+    Boolean run_diagnostics = true
+
     # Dockers
+    String athena_docker
     String athena_cloud_docker
+    String dsmap_r_docker
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_intersect_svs
     RuntimeAttr? runtime_attr_apply_training_mask
+    RuntimeAttr? runtime_attr_diagnostics
   }
 
   Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
@@ -65,8 +71,38 @@ workflow TrainMuModel {
       input:
         inbed=IntersectSVs.pairs_w_counts,
         exbed=training_mask,
-        prefix=basename(IntersectSVs.pairs_w_counts, ".bed.gz") + ".training"
+        prefix=basename(IntersectSVs.pairs_w_counts, ".bed.gz") + ".training",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_apply_training_mask
     }
+  }
+
+  # Run diagnostics, if optioned
+  if ( run_diagnostics ) {
+
+    # Get stats of bin-pairs before and after applying training blacklist
+    call GetPairDiagnostics {
+      input:
+        all_pairs=IntersectSVs.pairs_w_counts,
+        training_pairs=ApplyTrainingMask.filtered_bed,
+        cnv=cnv,
+        prefix=prefix,
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+
+    # Tar all diagnostics for convenience
+    call Utils.MakeTarball as MergeDiagnostics {
+      input:
+        files_to_tar=flatten([GetPairDiagnostics.all_outputs]),
+        tarball_prefix="~{prefix}.TrainMuModel.diagnostics",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+  }
+
+  output {
+    File? diagnostics = MergeDiagnostics.tarball
   }
 }
 
@@ -124,6 +160,69 @@ task IntersectSVs {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: athena_cloud_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Collect diagnostic stats and plots for bin-pairs before and after filtering to training set
+task GetPairDiagnostics {
+  input {
+    Array[File] all_pairs
+    Array[File] training_pairs
+    String cnv
+    String prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 100,
+    boot_disk_gb: 20,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    # Merge bin-pairs and keep first four columns only
+    zcat ~{all_pairs[0]} | sed -n '1p' | cut -f1-4 > pairs.bed
+    zcat ~{sep=" " all_pairs} | grep -ve '^#' | cut -f1-4 >> pairs.bed
+    bgzip -f pairs.bed
+    tabix -f pairs.bed.gz
+
+    # Merge training bin-pairs and keep first four columns only
+    zcat ~{training_pairs[0]} | sed -n '1p' | cut -f1-4 > training.bed
+    zcat ~{sep=" " training_pairs} | grep -ve '^#' | cut -f1-4 >> training.bed
+    bgzip -f training.bed
+    tabix -f training.bed.gz
+
+    # Get diagnostics
+    mkdir outputs/
+    /opt/dsmap/scripts/mu/get_pair_diagnostics.R \
+      --cnv ~{cnv} \
+      pairs.bed.gz \
+      training.bed.gz \
+      outputs/~{prefix}
+  }
+
+  output {
+    Array[File] all_outputs = glob("outputs/~{prefix}*")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

@@ -9,7 +9,8 @@ FROM ${DSMAP_BASE_IMAGE}
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Install libraries required for Cromshell
-RUN apt-get -qqy update && \
+RUN apt-get -qqy clean && \
+    apt-get -qqy update && \
     apt-get -qqy install --fix-missing \
       zip unzip \
       mailutils \

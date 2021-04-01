@@ -250,3 +250,51 @@ task ApplyExclusionBED {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+# Compress an aribtrary set of files into a single tarball for easy I/O
+task MakeTarball {
+  input {
+    Array[File] files_to_tar
+    String tarball_prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2,
+    disk_gb: 100,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    mkdir ~{tarball_prefix}
+
+    mv ~{sep=" " files_to_tar} ~{tarball_prefix}/
+
+    tar -czvf ~{tarball_prefix}.tar.gz ~{tarball_prefix}
+  }
+
+  output {
+    File tarball = "~{tarball_prefix}.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+

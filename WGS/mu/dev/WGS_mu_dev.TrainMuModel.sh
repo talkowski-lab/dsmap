@@ -52,6 +52,7 @@ for cnv in DEL DUP; do
   cat <<EOF > cromwell/inputs/$main_prefix.TrainMuModel.$cnv.input.json
 {
   "TrainMuModel.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:latest",
+  "TrainMuModel.athena_docker": "us.gcr.io/broad-dsmap/athena:latest",
   "TrainMuModel.cnv": "$cnv",
   "TrainMuModel.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
   "TrainMuModel.pairs_bed_prefix": "$main_prefix.pairs.eigen",
@@ -89,11 +90,22 @@ for cnv in DEL DUP; do
             | jq .workflowRoot | tr -d '"' )
   while read shard contig; do
     echo -e "\n\n__$cnv on ${contig}__"
-    gsutil -m cat ${bucket}call-IntersectSVs/shard-$shard/HGSV.WGS.dev.$cnv.pairs_wCounts.bed.gz \
+    gsutil -m cat ${bucket}call-IntersectSVs/shard-$shard/$main_prefix.$cnv.pairs.wCounts.$contig.bed.gz \
     | gunzip -c | sed '1d' | cut -f4 | sort -n | uniq -c
   done < <( awk -v OFS="\t" '{ print NR-1, $1 }' hg38.contigs.dev.fai )
 done
 
+# Sanity check: count the number of training bins with SVs per chromosome
+for cnv in DEL DUP; do
+  bucket=$( cromshell -t 20 metadata \
+              $( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' ) \
+            | jq .workflowRoot | tr -d '"' )
+  while read shard contig; do
+    echo -e "\n\n__$cnv on ${contig}__"
+    gsutil -m cat ${bucket}call-ApplyTrainingMask/shard-$shard/$main_prefix.$cnv.pairs.wCounts.$contig.training.bed.gz \
+    | gunzip -c | sed '1d' | cut -f4 | sort -n | uniq -c
+  done < <( awk -v OFS="\t" '{ print NR-1, $1 }' hg38.contigs.dev.fai )
+done
 # TODO: Move all final outputs to dsmap gs:// bucket for permanent storage
 
 

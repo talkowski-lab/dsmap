@@ -18,7 +18,7 @@ import argparse
 
 # Set priority of dockers to build (in order)
 # (Note: do not alter this without first confirming dependencies of base images)
-ordered_dockers = ['athena', 'athena-cloud', 'dsmap', 'dsmap-cromwell']
+ordered_dockers = ['athena', 'athena-cloud', 'dsmap', 'dsmap-cromwell', 'dsmap-r']
 
 
 class DockerError(Exception):
@@ -136,7 +136,7 @@ def format_build_args(args, docker, build_info, dockers_to_build):
         if 'athena-cloud' in dockers_to_build:
             build_args += '--build-arg ATHENA_CLOUD_BASE_IMAGE={} '.format(build_info['athena-cloud']['remote'])
 
-    elif docker == 'dsmap-cromwell':
+    elif docker in 'dsmap-cromwell dsmap-r'.split():
         # Use most recent build of dsmap base image if dsmap was also rebuilt
         if 'dsmap' in dockers_to_build:
             build_args += '--build-arg DSMAP_BASE_IMAGE={} '.format(build_info['dsmap']['remote'])

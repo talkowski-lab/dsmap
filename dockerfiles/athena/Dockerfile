@@ -8,7 +8,8 @@ FROM continuumio/miniconda3
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Install make and zlib
-RUN apt-get -qqy update && \
+RUN apt-get clean && \
+    apt-get -qqy update && \
     apt-get -qqy install --fix-missing \
       apt-utils \
       build-essential \
@@ -39,6 +40,7 @@ RUN apt-get -qqy update && \
     apt-get -qqy install --fix-missing default-libmysqlclient-dev
 RUN conda install -n dsmap -y mysqlclient
 RUN conda install -n dsmap -y pybigwig=0.3.17
+RUN conda install -n dsmap -y pytorch=1.5.0
 
 # Increase max MySQL packet size for large UCSC queries
 RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf
