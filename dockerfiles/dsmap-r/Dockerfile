@@ -15,7 +15,6 @@ RUN conda env create --file=/opt/dsmap/conda/dsmap-r.environment.yml
 ENV CONDA_DEFAULT_ENV dsmap-r
 RUN sed --in-place 's/conda activate dsmap/conda activate dsmap-r/g' ~/.bashrc
 ENV PATH /opt/conda/envs/dsmap-r/bin:$PATH
-RUN conda activate dsmap-r
 
 # Install dsmapR package from source
 ARG DSMAPR_VERSION=0.1.0
