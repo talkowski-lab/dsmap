@@ -18,7 +18,7 @@ RUN apt-get -qqy clean && \
       curl
 
 # Install cromshell & set default server URL
-RUN conda install -n dsmap -y cromshell
+RUN conda install -c bioconda -n dsmap -y cromshell
 ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
 RUN echo "$CROMWELL_URL\nYes" | cromshell
 

@@ -16,6 +16,7 @@
 #########
 # Load necessary libraries
 require(dsmapR, quietly=TRUE)
+require(optparse, quietly=TRUE)
 
 # Set global options and constants
 options(stringsAsFactors=FALSE, scipen=1000)
