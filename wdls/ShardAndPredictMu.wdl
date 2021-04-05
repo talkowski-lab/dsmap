@@ -61,7 +61,7 @@ workflow ShardAndPredictMu {
   call Utils.MergeBEDs as MergeBEDs {
     input:
       beds=ApplyMuModel.bed_w_mu,
-      prefix="~{prefix}.mu",
+      prefix="~{prefix}.~{contig}.mu",
       beds_are_bgzipped=true,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_beds

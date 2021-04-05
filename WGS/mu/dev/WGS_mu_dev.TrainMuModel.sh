@@ -86,16 +86,19 @@ for cnv in DEL DUP; do
   | jq .status
 done
 
-# Download diagnostics tarballs
+# Move all final outputs to dsmap gs:// bucket for permanent storage
 for cnv in DEL DUP; do
-  cromshell -t 20 metadata \
-    $( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' ) \
-  | jq .outputs | fgrep ".tar.gz" | awk '{ print $2 }' | tr -d '"'
-done | gsutil -m cp -I ./
-
-
-# TODO: Move all final outputs to dsmap gs:// bucket for permanent storage
-
+  workflow_id=$( cat /cromwell/logs/$main_prefix.TrainMuModel.$cnv.log | tail -n1 | jq .id | tr -d '"' )
+  cromshell -t 20 metadata $workflow_id \
+  | jq .outputs | sed 's/\"/\n/g' | fgrep "gs://" \
+  | gsutil -m cp -I gs://dsmap/data/dev/$main_prefix.TrainMuModel/
+  # Also make note of most recent workflow ID (in order to reference intermediate 
+  # outputs after Docker container is closed)
+  echo "$workflow_id" > $main_prefix.$cnv.TrainMuModel.latest_workflow_id.txt
+  gsutil -m cp \
+    $main_prefix.$cnv.TrainMuModel.latest_workflow_id.txt \
+    gs://dsmap/data/dev/$main_prefix.TrainMuModel/
+done
 
 
 ###########################################################

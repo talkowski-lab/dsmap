@@ -107,10 +107,16 @@ cromshell -t 20 metadata \
 | jq .status
 
 # Move all final outputs to dsmap gs:// bucket for permanent storage
-cromshell -t 20 metadata \
-  $( cat /cromwell/logs/$prefix.BinAndAnnotateGenome.log | tail -n1 | jq .id | tr -d '"' ) \
+workflow_id=$( cat /cromwell/logs/$prefix.BinAndAnnotateGenome.log | tail -n1 | jq .id | tr -d '"' )
+cromshell -t 20 metadata "$workflow_id" \
 | jq .outputs | sed 's/\"/\n/g' | fgrep "gs://" \
 | gsutil -m cp -I gs://dsmap/data/dev/$prefix.BinAndAnnotateGenome/
+# Also make note of most recent workflow ID (in order to reference intermediate 
+# outputs after Docker container is closed)
+echo "$workflow_id" > $prefix.BinAndAnnotateGenome.latest_workflow_id.txt
+gsutil -m cp \
+  $prefix.BinAndAnnotateGenome.latest_workflow_id.txt \
+  gs://dsmap/data/dev/$prefix.BinAndAnnotateGenome/
 
 
 ##########################################################

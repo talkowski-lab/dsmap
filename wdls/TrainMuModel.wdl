@@ -136,7 +136,8 @@ workflow TrainMuModel {
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
-        files_to_tar=flatten([GetPairDiagnostics.all_outputs]),
+        files_to_tar=flatten([GetPairDiagnostics.all_outputs, 
+                              [TrainModel.stats_tsv, TrainModel.calibration_tsv]]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
