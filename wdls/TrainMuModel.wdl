@@ -15,6 +15,7 @@ version 1.0
 
 import "Utils.wdl"
 import "Structs.wdl"
+import "ShardAndPredictMu.wdl"
 
 
 workflow TrainMuModel {
@@ -26,8 +27,10 @@ workflow TrainMuModel {
     String? pairs_bed_prefix
     File contigs_fai
     File training_mask
-    String prefix
+    String model
+    Int shard_size_apply_mu
     String cnv
+    String prefix
 
     # Diagnostics options
     Boolean run_diagnostics = true
@@ -41,6 +44,10 @@ workflow TrainMuModel {
     RuntimeAttr? runtime_attr_intersect_svs
     RuntimeAttr? runtime_attr_apply_training_mask
     RuntimeAttr? runtime_attr_diagnostics
+    RuntimeAttr? runtime_attr_train_model
+    RuntimeAttr? runtime_attr_shard_bed
+    RuntimeAttr? runtime_attr_apply_mu_model
+    RuntimeAttr? runtime_attr_merge_beds
   }
 
   Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
@@ -77,6 +84,39 @@ workflow TrainMuModel {
     }
   }
 
+  # Step 3. Train mutation rate model
+  call TrainModel {
+    input:
+      training_beds=ApplyTrainingMask.filtered_bed,
+      model=model,
+      contigs_fai=contigs_fai,
+      prefix="~{prefix}.~{cnv}",
+      athena_docker=athena_docker,
+      runtime_attr_override=runtime_attr_train_model
+  }
+
+  # Step 4. Apply mutation rate model to all bin-pairs, parallelized per chromosome
+  # Prepare inputs for scatter
+  Array[Pair[File, File]] predict_mu_beds_and_indexes = zip(IntersectSVs.pairs_w_counts, IntersectSVs.pairs_w_counts_idx)
+  Array[Pair[String, Pair[File, File]]] predict_mu_inputs = zip(contigs, predict_mu_beds_and_indexes)
+
+  # Scatter over chromosomes and apply mu model
+  scatter ( inputs in predict_mu_inputs) {
+    call ShardAndPredictMu.ShardAndPredictMu as PredictMu {
+      input:
+        bed=inputs.right.left,
+        bed_idx=inputs.right.right,
+        trained_model=TrainModel.trained_model,
+        shard_size=shard_size_apply_mu,
+        contig=inputs.left,
+        prefix="~{prefix}.~{cnv}",
+        athena_docker=athena_docker,
+        runtime_attr_shard_bed=runtime_attr_shard_bed,
+        runtime_attr_apply_mu_model=runtime_attr_apply_mu_model,
+        runtime_attr_merge_beds=runtime_attr_merge_beds
+    }
+  }
+
   # Run diagnostics, if optioned
   if ( run_diagnostics ) {
 
@@ -91,17 +131,21 @@ workflow TrainMuModel {
         runtime_attr_override=runtime_attr_diagnostics
     }
 
+    # TODO: plot training stats & model calibration from step 3
+
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
         files_to_tar=flatten([GetPairDiagnostics.all_outputs]),
-        tarball_prefix="~{prefix}.TrainMuModel.diagnostics",
+        tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
   }
 
   output {
+    Array[File] pairs_w_mu = PredictMu.pairs_w_mu
+    Array[File] pairs_w_mu_idx = PredictMu.pairs_w_mu_idx
     File? diagnostics = MergeDiagnostics.tarball
   }
 }
@@ -227,3 +271,65 @@ task GetPairDiagnostics {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+# Train a CNV mutation rate model
+task TrainModel {
+  input {
+    Array[File] training_beds
+    String model
+    File contigs_fai
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 8,
+    disk_gb: 250,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Build list of training BEDs per contig
+    while read contig; do
+      find / -name "*.$contig.training.bed.gz" \
+      | awk -v OFS="\t" -v contig="$contig" '{ print contig, $0 }'
+    done < <( cut -f1 ~{contigs_fai} ) \
+    > training_beds.tsv
+
+    # Train model
+    athena mu-train \
+      --training-data training_beds.tsv \
+      --model ~{model} \
+      --model-outfile ~{prefix}.~{model}.trained.pkl \
+      --stats-outfile ~{prefix}.~{model}.training_stats.tsv \
+      --calibration-outfile ~{prefix}.~{model}.calibration.tsv
+    gzip -f ~{prefix}.~{model}.calibration.tsv
+  >>>
+
+  output {
+    File trained_model = "~{prefix}.~{model}.trained.pkl"
+    File stats_tsv = "~{prefix}.~{model}.training_stats.tsv"
+    File calibration_tsv = "~{prefix}.~{model}.calibration.tsv.gz"
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
