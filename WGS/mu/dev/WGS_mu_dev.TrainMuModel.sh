@@ -56,6 +56,7 @@ for cnv in DEL DUP; do
   "TrainMuModel.cnv": "$cnv",
   "TrainMuModel.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
   "TrainMuModel.dsmap_r_docker" : "us.gcr.io/broad-dsmap/dsmap-r:latest",
+  "TrainMuModel.model": "logit",
   "TrainMuModel.pairs_bed_prefix": "$main_prefix.pairs.eigen",
   "TrainMuModel.pairs_bucket": "gs://dsmap/data/dev/$main_prefix.BinAndAnnotateGenome",
   "TrainMuModel.prefix": "$main_prefix",

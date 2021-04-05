@@ -301,7 +301,7 @@ task TrainModel {
 
     # Build list of training BEDs per contig
     while read contig; do
-      find / -name "*.$contig.training.bed.gz" \
+      fgrep "$contig.training.bed.gz" ~{write_lines(training_beds)} \
       | awk -v OFS="\t" -v contig="$contig" '{ print contig, $0 }'
     done < <( cut -f1 ~{contigs_fai} ) \
     > training_beds.tsv
