@@ -41,5 +41,8 @@ RUN cd /opt/athena && \
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
 
+# Clean conda caches to decrease image size
+RUN conda clean -y --all
+
 # Launch bash
 CMD ["/bin/bash"]

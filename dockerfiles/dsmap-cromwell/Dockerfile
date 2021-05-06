@@ -35,5 +35,8 @@ RUN mkdir /opt/bin && \
 # cromshell script that aliases curl -k and allows insecure connections
 RUN ln -sf /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
 
+# Clean conda caches to decrease image size
+RUN conda clean -y --all
+
 # Launch bash
 CMD ["/bin/bash"]

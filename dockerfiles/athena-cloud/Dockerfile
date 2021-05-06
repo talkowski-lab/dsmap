@@ -35,5 +35,8 @@ RUN apt-get -qqy clean && \
            /usr/share/man/??_* && \
     gcloud --help
 
+# Clean conda caches to decrease image size
+RUN conda clean -y --all
+
 # Launch bash
 CMD ["/bin/bash"]

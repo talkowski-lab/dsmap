@@ -27,7 +27,7 @@ export sv_base_mini_docker="us.gcr.io/broad-dsmap/gatk-sv/sv-base-mini:rlc_posth
 export cohort="HGSV"
 export tech="WGS"
 export prefix="${cohort}.${tech}"
-export raw_vcf="gs://talkowski-sv-gnomad-output/1KGP/final_vcf/1KGP_2504_and_698_with_GIAB.boost.PASS_gt_revised.vcf.gz"
+export raw_vcf="gs://dsmap/data/WGS/HGSV/unfiltered_full_vcf/HGSV.WGS.vcf.gz"
 
 # Prep Cromwell directory structure
 mkdir cromwell

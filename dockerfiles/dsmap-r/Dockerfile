@@ -34,5 +34,8 @@ RUN apt-get clean && \
 RUN apt-get -qqy update && \
     apt-get -qqy install ttf-mscorefonts-installer
 
+# Clean conda caches to decrease image size
+RUN conda clean -y --all
+
 # Launch bash
 CMD ["/bin/bash"]
