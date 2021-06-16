@@ -25,6 +25,8 @@ RUN apt-get -qqy update && \
 # is installed from a config file provided in /opt/athena/conda/environment.yml
 RUN conda update -n base conda
 RUN conda env create --file=/opt/athena/conda/environment.yml
+# TODO: install directly into base environment to decrease layer size
+# TODO: install hic-straw from GitHub (https://github.com/aidenlab/straw) *NOT* pip
 ENV CONDA_DEFAULT_ENV dsmap
 RUN echo "conda activate dsmap" >> ~/.bashrc
 ENV PATH /opt/conda/envs/dsmap/bin:$PATH

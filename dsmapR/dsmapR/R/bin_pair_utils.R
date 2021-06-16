@@ -23,7 +23,7 @@
 #' 1. `$coords`: a three-column dataframe of bin coordinates
 #' 2. `$feats`: a dataframe of bin features
 #' @export
-load_bins <- function(bed_in, n_keep_features=Inf, feats_are_numeric=TRUE){
+load.bins <- function(bed_in, n_keep_features=Inf, feats_are_numeric=TRUE){
   # Read full bed_in
   x <- read.table(bed_in, header=T, sep="\t", comment.char="", check.names=F)
   colnames(x)[1] <- gsub("#", "", colnames(x)[1], fixed=T)
@@ -57,11 +57,11 @@ load_bins <- function(bed_in, n_keep_features=Inf, feats_are_numeric=TRUE){
 #' @param n_samp number of rows to sample from dataframe. Default = 1,000.
 #' @examples
 #' # Load coordinates from a BED file & infer bin size
-#' bins <- dsmapR::load_bins("path/to/my/bins.bed")
-#' binsize <- infer_bin_size(bins$coords)
+#' bins <- dsmapR::load.bins("path/to/my/bins.bed")
+#' binsize <- infer.bin.size(bins$coords)
 #' @return Integer estimate of inferred bin size
 #' @export
-infer_bin_size <- function(coords, n_samp=1000){
+infer.bin.size <- function(coords, n_samp=1000){
   contig <- coords[1, 1]
   starts <- head(sort(unique(coords[which(coords[, 1] == contig), 2])), n_samp)
   min(starts[2:length(starts)] - starts[(2:length(starts))-1])

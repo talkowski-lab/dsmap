@@ -28,6 +28,7 @@ This repository contains the working code and scripts used to:
 | [`dockerfiles/`](https://github.com/talkowski-lab/dsmap/tree/main/docker) | Build files for Docker Images used in this project |  
 | [`dsmapR/`](https://github.com/talkowski-lab/dsmap/tree/main/dsmapR) | Source for `dsmapR` R package |  
 | [`integration/`](https://github.com/talkowski-lab/dsmap/tree/main/integration) | Cross-technology integration of dosage sensitivity maps |  
+| [`paper/`](https://github.com/talkowski-lab/dsmap/tree/main/paper) | Analyses & figures for DSMap paper |  
 | [`scripts/`](https://github.com/talkowski-lab/dsmap/tree/main/scripts) | Stand-alone helper scripts |  
 | [`wdls/`](https://github.com/talkowski-lab/dsmap/tree/main/wdls) | Stand-alone WDL workflows |  
 | [`WES/`](https://github.com/talkowski-lab/dsmap/tree/main/wes) | Processing & analysis of whole-exome sequencing datasets |  

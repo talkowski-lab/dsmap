@@ -20,16 +20,16 @@ require(optparse, quietly=TRUE)
 
 # Set global options and constants
 options(stringsAsFactors=FALSE, scipen=1000)
-colors <- dsmapR::get_constants("colors")
+colors <- dsmapR::get.constants("colors")
 
 
 ##################
 # Data functions #
 ##################
-# Summarize distributions of pairs for an input BED loaded with dsmapR::load_pairs()
+# Summarize distributions of pairs for an input BED loaded with dsmapR::load.pairs()
 summarize.pairs <- function(pairs){
   contigs <- unique(pairs$coords[, 1])
-  binsize <- infer_bin_size(pairs$coords)
+  binsize <- infer.bin.size(pairs$coords)
   sizes <- pairs$coords[, 3] - pairs$coords[, 2] - binsize
   has_sv <- pairs$feats[, 1] >= 0.5
 
@@ -72,14 +72,14 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
   }
 
   # Prep plotting area
-  prep_plot_area(xlims=c(0, n.bars), ylims=c(0, max(df)),
+  prep.plot.area(xlims=c(0, n.bars), ylims=c(0, max(df)),
                  parmar=c(2.1, 2.8, 1.2, 0.3))
 
   # Add bars
-  sapply(1:2, function(i){
-    rect(xleft=(1:n.bars)-1, xright=1:n.bars,
-         ybottom=0, ytop=df[, i], border=NA, col=bar.colors[i])
-  })
+  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=0, ytop=df[, 1],
+       border=NA, col=bar.colors[1])
+  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 1], ytop=df[, 2],
+       border=NA, col=bar.colors[2])
   rect(xleft=(1:n.bars)-1, xright=1:n.bars,
        ybottom=0, ytop=apply(df, 1, max), border="white", col=NA)
 
@@ -136,8 +136,8 @@ out.prefix <- args$args[3]
 cnv <- opts$cnv
 
 # Load pairs
-pairs <- load_bins(pairs.in)
-training <- load_bins(training.in)
+pairs <- load.bins(pairs.in)
+training <- load.bins(training.in)
 
 # Summarize counts
 pairs.dat <- summarize.pairs(pairs)

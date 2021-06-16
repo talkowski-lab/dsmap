@@ -21,10 +21,10 @@
 #' * `other_colors` : all other color constants not included in CNV palettes (subset of `colors`)
 #' @examples
 #' # Load list of color palettes
-#' dsmap.colors <- get_constants("colors");
+#' dsmap.colors <- get.constants("colors");
 #' @return Returns a vector of constants corresponding to the value of `subset`
 #' @export
-get_constants <- function(subset){
+get.constants <- function(subset){
   # Define colors
   cnv.colors <- list("DEL" = list("dark2" = "#4F1C14",
                                   "dark1" = "#9F2B1C",

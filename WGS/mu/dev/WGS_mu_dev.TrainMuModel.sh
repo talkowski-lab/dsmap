@@ -16,7 +16,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-4cf333-b937d4
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:$docker_tag
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -27,6 +27,7 @@ gcloud auth application-default login
 export cohort="HGSV"
 export tech="WGS"
 export main_prefix="${cohort}.${tech}.dev"
+export docker_tag="wgs-mu-dev-58377c-ec4099"
 
 # Prep Cromwell directory structure
 mkdir cromwell
@@ -49,13 +50,13 @@ cd -
 # Must run once for each CNV type
 for cnv in DEL DUP; do
   # Make inputs .json
-  cat <<EOF > cromwell/inputs/$main_prefix.TrainMuModel.$cnv.input.json
+  cat <<EOF > /cromwell/inputs/$main_prefix.TrainMuModel.$cnv.input.json
 {
-  "TrainMuModel.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:latest",
-  "TrainMuModel.athena_docker": "us.gcr.io/broad-dsmap/athena:latest",
+  "TrainMuModel.athena_cloud_docker": "us.gcr.io/broad-dsmap/athena-cloud:$docker_tag",
+  "TrainMuModel.athena_docker": "us.gcr.io/broad-dsmap/athena:$docker_tag",
   "TrainMuModel.cnv": "$cnv",
   "TrainMuModel.contigs_fai": "gs://dsmap/data/dev/hg38.contigs.dev.fai",
-  "TrainMuModel.dsmap_r_docker" : "us.gcr.io/broad-dsmap/dsmap-r:latest",
+  "TrainMuModel.dsmap_r_docker" : "us.gcr.io/broad-dsmap/dsmap-r:$docker_tag",
   "TrainMuModel.model": "logit",
   "TrainMuModel.pairs_bed_prefix": "$main_prefix.pairs.eigen",
   "TrainMuModel.pairs_bucket": "gs://dsmap/data/dev/$main_prefix.BinAndAnnotateGenome",
