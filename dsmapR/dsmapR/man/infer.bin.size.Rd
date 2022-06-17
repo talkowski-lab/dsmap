@@ -21,4 +21,5 @@ Infer bin size from BED file loaded as dataframe
 # Load coordinates from a BED file & infer bin size
 bins <- dsmapR::load.bins("path/to/my/bins.bed")
 binsize <- infer.bin.size(bins$coords)
+
 }

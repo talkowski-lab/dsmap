@@ -16,6 +16,7 @@
 #    Setup    #
 ###############
 # Launch Docker
+export docker_tag="wgs-mu-dev-58377c-ec4099"
 docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:$docker_tag
 
 # Authenticate GCP credentials
@@ -24,16 +25,17 @@ gcloud config set project broad-dsmap
 gcloud auth application-default login
 
 # Set global parameters
+export docker_tag="wgs-mu-dev-58377c-ec4099"
 export cohort="HGSV"
 export tech="WGS"
 export main_prefix="${cohort}.${tech}.dev"
-export docker_tag="wgs-mu-dev-58377c-ec4099"
 
 # Prep Cromwell directory structure
 mkdir cromwell
 for subdir in logs outputs inputs; do
   mkdir cromwell/$subdir
 done
+
 
 #######################################################
 #    Train mutation rate model - one-shot workflow    #

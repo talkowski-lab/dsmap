@@ -14,14 +14,17 @@
 #' Load athena bins or bin-pairs
 #'
 #' Load a BED file of athena 1D bins or 2D bin-pairs
+#'
 #' @param bed_in Path to input BED file
 #' @param n_keep_features Number of feature columns to keep. Defaults to keeping
 #' all feature columns present in `bed_in`.
 #' @param feats_are_numeric Boolean indicating if all features should be coerced
 #' to numeric type. `TRUE` by default.
+#'
 #' @return Returns a list of two dataframes:
 #' 1. `$coords`: a three-column dataframe of bin coordinates
 #' 2. `$feats`: a dataframe of bin features
+#'
 #' @export
 load.bins <- function(bed_in, n_keep_features=Inf, feats_are_numeric=TRUE){
   # Read full bed_in
@@ -53,13 +56,17 @@ load.bins <- function(bed_in, n_keep_features=Inf, feats_are_numeric=TRUE){
 #' Infer bin size
 #'
 #' Infer bin size from BED file loaded as dataframe
+#'
 #' @param coords Dataframe styled as BED (first three columns are coordinates)
 #' @param n_samp number of rows to sample from dataframe. Default = 1,000.
+#'
 #' @examples
 #' # Load coordinates from a BED file & infer bin size
 #' bins <- dsmapR::load.bins("path/to/my/bins.bed")
 #' binsize <- infer.bin.size(bins$coords)
+#'
 #' @return Integer estimate of inferred bin size
+#'
 #' @export
 infer.bin.size <- function(coords, n_samp=1000){
   contig <- coords[1, 1]

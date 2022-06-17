@@ -2,9 +2,9 @@
 
 S3method(plot,diag.heat)
 export(add.scale.bar)
-export(get.constants)
 export(infer.bin.size)
 export(load.bins)
+export(load.constants)
 export(plot.diag.heat)
 export(prep.plot.area)
 export(rotate.points)

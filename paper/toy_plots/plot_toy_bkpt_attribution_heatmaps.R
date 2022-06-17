@@ -18,7 +18,7 @@ require(viridis, quietly=TRUE)
 
 # Set global options and constants
 options(stringsAsFactors=FALSE, scipen=1000)
-colors <- dsmapR::get.constants("colors")
+dsmapR::load.constants("colors")
 
 
 # Distribute breakpoint probability across 1D bins
@@ -63,6 +63,15 @@ opts <- args$options
 # Writes args & opts to vars
 out.prefix <- args$args[1]
 
+# Heatmap for single SV example with no attribution / no uncertainty
+single.bkpt.prob.nosd <- sim.bkpt.probs(matrix.start=0, matrix.end=10000, bin.width=1000,
+                                   sv.df=data.frame("start"=3500, "end"=6500, "stdev"=0))
+pdf(paste(out.prefix, "single_bkpt_example", "no_stdev", "diag_heat", "pdf", sep="."),
+    width=2.8, height=1.4)
+plot.diag.heat(single.bkpt.prob.nosd, orient="down", parmar=rep(0, 4))
+add.scale.bar(bin.size=1000, units="kb")
+dev.off()
+
 # Heatmap for single SV example
 single.bkpt.prob <- sim.bkpt.probs(matrix.start=0, matrix.end=10000, bin.width=1000,
                                    sv.df=data.frame("start"=3500, "end"=6500, "stdev"=1000))
@@ -85,7 +94,7 @@ plot.diag.heat(multi.bkpt.prob, orient="down", parmar=rep(0, 4))
 add.scale.bar(bin.size=1000, units="kb")
 dev.off()
 
-# Guide for multi-SV example:
+# Guide for drawing CNV bars in multi-SV example:
 pdf(paste(out.prefix, "multi_bkpt_example", "guide", "pdf", sep="."),
     width=4, height=1)
 prep.plot.area(xlims=c(0, 25000), ylims=c(0, nrow(multi.sv.df)), parmar=rep(0, 4))

@@ -4,7 +4,7 @@
 \alias{prep.plot.area}
 \title{Prepare plot area}
 \usage{
-prep.plot.area(xlims, ylims, parmar)
+prep.plot.area(xlims, ylims, parmar, xaxs = "i", yaxs = "i")
 }
 \arguments{
 \item{xlims}{Range of values for X axis}
@@ -12,10 +12,15 @@ prep.plot.area(xlims, ylims, parmar)
 \item{ylims}{Range of values for Y axis}
 
 \item{parmar}{Margin values passed to par()}
+
+\item{xaxs}{Value of \code{xaxs} passed to plot()}
+
+\item{yaxs}{Value of \code{yaxs} passed to plot()}
 }
 \description{
 Prepare a standardized & formatted plot area
 }
 \examples{
 prep.plot.area(xlims=c(0, 5), ylims=(-10, 10), parmar=rep(3, 4));
+
 }

@@ -20,7 +20,7 @@ require(optparse, quietly=TRUE)
 
 # Set global options and constants
 options(stringsAsFactors=FALSE, scipen=1000)
-colors <- dsmapR::get.constants("colors")
+dsmapR::load.constants("colors")
 
 
 ##################
@@ -64,10 +64,11 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
   all.x.labels <- rownames(df)
   n.bars <- nrow(df)
   if(cnv %in% c("DEL", "DUP", "CNV")){
-    bar.colors <- c(colors[[cnv]]$light1, colors[[cnv]]$dark1)
+    bar.colors <- c(get(paste(cnv, "colors", sep="."))$light1,
+                    get(paste(cnv, "colors", sep="."))$dark1)
     legend.labs <- paste(c("No", "Has"), cnv)
   }else{
-    bar.colors <- c(colors$brown$light1, colors$brown$dark1)
+    bar.colors <- c(browns$light1, browns$dark1)
     legend.labs <- c("No SV", "Has SV")
   }
 
@@ -87,16 +88,16 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
   default.x.ticks <- axTicks(1)
   x.ax.at <- default.x.ticks[-length(default.x.ticks)] + 0.5
   x.ax.labels <- all.x.labels[x.ax.at + 0.5]
-  axis(1, at=c(-10e10, 10e10), col=colors$offblack, tck=0)
-  axis(1, at=x.ax.at, tck=-0.025, col=colors$offblack, labels=NA)
+  axis(1, at=c(-10e10, 10e10), col=offblack, tck=0)
+  axis(1, at=x.ax.at, tck=-0.025, col=offblack, labels=NA)
   axis(1, at=x.ax.at, tick=F, line=-0.65, labels=x.ax.labels)
   mtext(1, line=1.25, text=x.axis.title)
 
   # Add Y axis
   y.ax.at <- axTicks(2)
   y.ax.labels <- prettyNum(y.ax.at / 1000, big.mark=",")
-  axis(2, at=c(-10e10, 10e10), col=colors$offblack, tck=0)
-  axis(2, at=y.ax.at, tck=-0.025, col=colors$offblack, labels=NA)
+  axis(2, at=c(-10e10, 10e10), col=offblack, tck=0)
+  axis(2, at=y.ax.at, tck=-0.025, col=offblack, labels=NA)
   axis(2, at=y.ax.at, tick=F, line=-0.65, labels=y.ax.labels, las=2)
   mtext(2, line=1.9, text="Bin-pairs (thousands)")
 
@@ -105,7 +106,7 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
 
   # Add legend
   legend("topright", legend=legend.labs, fill=bar.colors, cex=0.85,
-         border=colors$offblack, bg=colors$offwhite)
+         border=offblack, bg=offwhite, xpd=T)
 }
 
 

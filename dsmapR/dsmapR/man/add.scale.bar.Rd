@@ -38,6 +38,7 @@ Add a 1D scale bar to a diagonal heatmap produced by \code{\link[=plot.diag.heat
 \examples{
 plot.diag.heat(matrix(rnorm(100), nrow=10))
 add.scale.bar(bin.size=1000, units="kb", label.vadj=-0.01)
+
 }
 \seealso{
 \code{\link[=plot.diag.heat]{plot.diag.heat()}}

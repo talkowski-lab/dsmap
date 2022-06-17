@@ -120,23 +120,33 @@ workflow TrainMuModel {
   # Run diagnostics, if optioned
   if ( run_diagnostics ) {
 
-    # Get stats of bin-pairs before and after applying training blacklist
+    # Get stats of bin-pairs before and after applying training mask
     call GetPairDiagnostics {
       input:
         all_pairs=IntersectSVs.pairs_w_counts,
         training_pairs=ApplyTrainingMask.filtered_bed,
         cnv=cnv,
-        prefix=prefix,
+        prefix="~{prefix}.~{cnv}",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
 
-    # TODO: plot training stats & model calibration from step 3
+    # Plot training stats & model calibration from step 3
+    call PlotTrainingDiagnostics {
+      input:
+        stats_tsv=TrainModel.stats_tsv,
+        calibration_tsv=TrainModel.calibration_tsv,
+        cnv=cnv,
+        prefix="~{prefix}.~{cnv}",
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
 
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
         files_to_tar=flatten([GetPairDiagnostics.all_outputs, 
+                              PlotTrainingDiagnostics.all_outputs,
                               [TrainModel.stats_tsv, TrainModel.calibration_tsv]]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.diagnostics",
         athena_docker=athena_docker,
@@ -256,6 +266,63 @@ task GetPairDiagnostics {
       pairs.bed.gz \
       training.bed.gz \
       outputs/~{prefix}
+  }
+
+  output {
+    Array[File] all_outputs = glob("outputs/~{prefix}*")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Plot model training/testing performance and calibration
+task PlotTrainingDiagnostics {
+  input {
+    File stats_tsv
+    File calibration_tsv
+    String cnv
+    String prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 100,
+    boot_disk_gb: 20,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    mkdir outputs/
+
+    # Plot stats
+    /opt/dsmap/scripts/mu/plot_training_stats.R \
+      --cnv ~{cnv} \
+      ~{stats_tsv} \
+      outputs/~{prefix}.training_stats.pdf
+
+    # Plot calibration
+    /opt/dsmap/scripts/mu/plot_calibration.R \
+      --cnv ~{cnv} \
+      ~{calibration_tsv} \
+      outputs/~{prefix}.calibration.pdf
   }
 
   output {

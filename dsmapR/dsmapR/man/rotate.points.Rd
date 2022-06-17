@@ -23,4 +23,5 @@ Rotate one or more points in 2D Cartesian space
 }
 \examples{
 rotate.points(coords=data.frame("x"=c(2, 5), "y"=c(0, 3)), angle=90)
+
 }
