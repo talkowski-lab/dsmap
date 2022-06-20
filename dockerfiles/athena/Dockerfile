@@ -3,12 +3,38 @@
 # Copyright (c) 2019-Present Ryan L. Collins <rlcollins@g.harvard.edu> 
 # Distributed under terms of the MIT License
 
-# Base image: miniconda 3
-FROM continuumio/miniconda3
+
+##################################
+# BUILD STAGE 1: CONDA ENVIRONMENT
+##################################
+
+# Base image: conda-forge's miniconda build with mamba pre-installed (for building python environment prior to conda-pack)
+FROM condaforge/mambaforge AS build
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Load athena repo (must be present in build context)
 ADD athena /opt/athena
+COPY athena/config/condarc ~/.mambarc
+
+# Create default python environment
+RUN mamba update --all && \
+    mamba env create --file=/opt/athena/config/environment.yml
+
+# Use conda-pack to create a standalone enviornment
+RUN mamba install conda-pack && \
+    conda-pack -n olympus -o /tmp/env.tar && \
+    mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
+    rm /tmp/env.tar && \
+    /venv/bin/conda-unpack
+
+
+##############################
+# BUILD STAGE 2: RUNTIME IMAGE
+##############################
+
+# Base image: debian bullseye (for smaller runtime image)
+FROM debian:bullseye AS runtime
+MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Install make and zlib
 RUN apt-get clean && \
@@ -17,35 +43,28 @@ RUN apt-get clean && \
       apt-utils \
       build-essential \
       zlib1g-dev \
-      less
-RUN apt-get -qqy update && \
-    apt-get -qqy install --fix-missing default-libmysqlclient-dev
-
-# Create default python environment
-# Note: given the large number of packages installed at this step, this environment
-# is installed from a config file provided in /opt/athena/conda/environment.yml
-RUN conda update -n base conda
-RUN conda env create --file=/opt/athena/conda/environment.yml
-# TODO: install directly into base environment to decrease layer size
-# TODO: install hic-straw from GitHub (https://github.com/aidenlab/straw) *NOT* pip
-ENV CONDA_DEFAULT_ENV dsmap
-RUN echo "conda activate dsmap" >> ~/.bashrc
-ENV PATH /opt/conda/envs/dsmap/bin:$PATH
+      less \
+      default-libmysqlclient-dev
 
 # Increase max MySQL packet size for large UCSC queries
-RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf
-RUN echo "[client]\nmax_allowed_packet = 2G" >> /etc/my.cnf
-
-# Install Athena
-RUN cd /opt/athena && \
-    pip install -e .
+RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \
+    echo "[client]\nmax_allowed_packet = 2G" >> /etc/my.cnf
 
 # Developer aliases, etc (for convenience)
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
 
-# Clean conda caches to decrease image size
-RUN conda clean -y --all
+# Make bash default shell & load Olympus on container startup
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+RUN echo "source /venv/bin/activate" >> ~/.bashrc
+
+# Copy /venv from the build stage
+COPY --from=build /venv /venv
+COPY --from=build /opt/athena /opt/athena
+
+# Install Athena
+RUN cd /opt/athena && \
+    pip install -e .
 
 # Launch bash
 CMD ["/bin/bash"]

@@ -179,8 +179,8 @@ task IntersectSVs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -237,7 +237,7 @@ task GetPairDiagnostics {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 100,
+    disk_gb: 10 + ceil(2 * (size(all_pairs, "GB") + size(training_pairs, "GB"))),
     boot_disk_gb: 20,
     preemptible_tries: 3,
     max_retries: 1
@@ -300,7 +300,7 @@ task PlotTrainingDiagnostics {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 100,
+    disk_gb: 10 + ceil(2 * size([stats_tsv, calibration_tsv], "GB")),
     boot_disk_gb: 20,
     preemptible_tries: 3,
     max_retries: 1
@@ -357,7 +357,7 @@ task TrainModel {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 8,
-    disk_gb: 250,
+    disk_gb: 20 + ceil((2 * size(training_beds, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

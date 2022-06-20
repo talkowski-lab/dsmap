@@ -32,6 +32,7 @@
 #' # Load scales and CNV colors
 #' get.constants(c("scales", "cnv_colors"))
 #'
+#' @export load.constants
 #' @export
 load.constants <- function(subset){
   # Define colors

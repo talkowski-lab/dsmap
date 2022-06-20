@@ -11,8 +11,5 @@ MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 # Add DSMap code (assumes repo has been cloned into build context)
 ADD dsmap /opt/dsmap
 
-# Clean conda caches to decrease image size
-RUN conda clean -y --all
-
 # Launch bash
 CMD ["/bin/bash"]

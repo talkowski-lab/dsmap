@@ -3,40 +3,96 @@
 # Copyright (c) 2021-Present Ryan L. Collins <rlcollins@g.harvard.edu> 
 # Distributed under terms of the MIT License
 
-# Base image: us.gcr.io/broad-dsmap/dsmap
-ARG DSMAP_BASE_IMAGE="us.gcr.io/broad-dsmap/dsmap:latest"
-FROM ${DSMAP_BASE_IMAGE}
+
+##################################
+# BUILD STAGE 1: CONDA ENVIRONMENT
+##################################
+
+# Base image: conda-forge's miniconda build with mamba pre-installed (for building python environment prior to conda-pack)
+FROM condaforge/mambaforge AS build
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
-# Install libraries required for Cromshell
-RUN apt-get -qqy clean && \
-    apt-get -qqy update && \
-    apt-get -qqy install --fix-missing \
-      zip unzip \
-      mailutils \
-      bsdmainutils \
-      curl
+# Load Athena & DSMap repos (must be present in build context)
+ADD athena /opt/athena
+ADD dsmap /opt/dsmap
+COPY athena/config/condarc ~/.mambarc
 
-# Install cromshell & set default server URL
-RUN conda install -c bioconda -n dsmap -y cromshell
-ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
-RUN echo "$CROMWELL_URL\nYes" | cromshell
+# # Create default python environment
+# RUN mamba update --all && \
+#     mamba env create --file=/opt/dsmap/env/environment.dsmap-cromwell.yml
 
-# Cromshell conflicts with Anaconda's version of curl
-# Solution: symlink /usr/bin/curl to /opt/bin/curl and add /opt/bin to $PATH
-# /opt/bin must be added to path at the end of ~/.bashrc (rather than via ENV PATH)
-# due to conda activate prepending to the path when the container is deployed
-RUN mkdir /opt/bin && \
-    ln -s /usr/bin/curl /opt/bin/curl && \
-    echo 'export PATH="/opt/bin:$PATH"' >> ~/.bashrc
+# # Use conda-pack to create a standalone enviornment
+# RUN mamba install conda-pack && \
+#     conda-pack -n dsmap -o /tmp/env.tar && \
+#     mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
+#     rm /tmp/env.tar && \
+#     /venv/bin/conda-unpack
 
-# Cromshell within docker is unable to get local issuer certificate
-# Can work around this issue by replacing conda-installed cromshell with modified 
-# cromshell script that aliases curl -k and allows insecure connections
-RUN ln -sf /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
 
-# Clean conda caches to decrease image size
-RUN conda clean -y --all
+# ##############################
+# # BUILD STAGE 2: RUNTIME IMAGE
+# ##############################
+
+# # Base image: debian bullseye (for smaller runtime image)
+# FROM debian:bullseye AS runtime
+# MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
+
+# # Install make and zlib
+# RUN apt-get clean && \
+#     apt-get -qqy update && \
+#     apt-get -qqy install --fix-missing \
+#       apt-utils \
+#       build-essential \
+#       zlib1g-dev \
+#       less \
+#       default-libmysqlclient-dev \
+#       zip unzip \
+#       mailutils \
+#       bsdmainutils \
+#       curl
+
+# # Increase max MySQL packet size for large UCSC queries
+# RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \
+#     echo "[client]\nmax_allowed_packet = 2G" >> /etc/my.cnf
+
+# # Developer aliases, etc (for convenience)
+# RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
+#     echo 'alias less="zless"' >> ~/.bashrc
+
+# # Make bash default shell & load DSMap environment on container startup
+# RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+# RUN echo "source /venv/bin/activate" >> ~/.bashrc
+
+# # Copy /venv from the build stage
+# COPY --from=build /venv /venv
+# COPY --from=build /opt/athena /opt/athena
+# COPY --from=build /opt/dsmap /opt/dsmap
+
+# # Install Athena
+# RUN cd /opt/athena && \
+#     pip install -e .
+
+# # Install gcloud
+# ARG DEBIAN_FRONTEND=noninteractive
+# RUN /opt/athena/env/install_gcloud.sh
+
+# # Install cromshell & set default server URL
+# ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
+# RUN conda install -c bioconda -n dsmap -y cromshell && \
+#     echo "$CROMWELL_URL\nYes" | cromshell
+
+# # Cromshell conflicts with Anaconda's version of curl
+# # Solution: symlink /usr/bin/curl to /opt/bin/curl and add /opt/bin to $PATH
+# # /opt/bin must be added to path at the end of ~/.bashrc (rather than via ENV PATH)
+# # due to conda activate prepending to the path when the container is deployed
+# RUN mkdir /opt/bin && \
+#     ln -s /usr/bin/curl /opt/bin/curl && \
+#     echo 'export PATH="/opt/bin:$PATH"' >> ~/.bashrc
+
+# # Cromshell within docker is unable to get local issuer certificate
+# # Can work around this issue by replacing conda-installed cromshell with modified 
+# # cromshell script that aliases curl -k and allows insecure connections
+# RUN ln -sf /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
 
 # Launch bash
 CMD ["/bin/bash"]

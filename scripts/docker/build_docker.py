@@ -106,7 +106,9 @@ def clone_git_repo(repo_url, hash):
     repo_name = os.path.basename(repo_url).split('.')[0]
 
     # Clone
-    ret = os.system('git clone ' + repo_url)
+    clone_cmd = 'git clone ' + repo_url + ' && '
+    clone_cmd += 'chmod a+w ' + repo_name
+    ret = os.system(clone_cmd)
     if 0 != ret:
         raise GithubError('Failed to clone ' + repo_url)
 
