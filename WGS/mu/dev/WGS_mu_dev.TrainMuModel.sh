@@ -16,7 +16,7 @@
 #    Setup    #
 ###############
 # Launch Docker
-export docker_tag="wgs-mu-dev-58377c-ec4099"
+export docker_tag="wgs-mu-dev-80a554-b3128d"
 docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:$docker_tag
 
 # Authenticate GCP credentials
@@ -25,7 +25,7 @@ gcloud config set project broad-dsmap
 gcloud auth application-default login
 
 # Set global parameters
-export docker_tag="wgs-mu-dev-58377c-ec4099"
+export docker_tag="wgs-mu-dev-80a554-b3128d"
 export cohort="HGSV"
 export tech="WGS"
 export main_prefix="${cohort}.${tech}.dev"

@@ -16,7 +16,8 @@ RUN apt-get clean && \
     apt-get -qqy install --fix-missing \
       apt-utils \
       build-essential \
-      zlib1g-dev
+      zlib1g-dev \
+      less
 RUN apt-get -qqy update && \
     apt-get -qqy install --fix-missing default-libmysqlclient-dev
 
