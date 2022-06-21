@@ -80,7 +80,7 @@ RUN /opt/athena/config/install_gcloud.sh
 
 # Set default Cromwell server URL
 ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
-RUN echo "$CROMWELL_URL\nYes" | cromshell
+RUN echo -e "$CROMWELL_URL\nYes" | cromshell
 
 # Cromshell conflicts with Anaconda's version of curl
 # Solution: symlink /usr/bin/curl to /opt/bin/curl and add /opt/bin to $PATH
