@@ -46,7 +46,6 @@ RUN echo "source /venv/bin/activate" >> ~/.bashrc
 ENV VIRTUAL_ENV=/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-
 # Install make and zlib
 RUN apt-get clean && \
     apt-get -qqy update && \
@@ -55,7 +54,8 @@ RUN apt-get clean && \
       build-essential \
       zlib1g-dev \
       less \
-      default-libmysqlclient-dev
+      default-libmysqlclient-dev \
+      curl
 
 # Increase max MySQL packet size for large UCSC queries
 RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \
