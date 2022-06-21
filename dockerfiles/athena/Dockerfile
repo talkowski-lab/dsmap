@@ -14,7 +14,7 @@ MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Load athena repo (must be present in build context)
 ADD athena /opt/athena
-COPY athena/config/condarc ~/.mambarc
+COPY athena/config/condarc ~/.condarc
 
 # Create default python environment
 RUN mamba update --all && \
