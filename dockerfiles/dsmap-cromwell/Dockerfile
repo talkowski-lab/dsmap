@@ -37,6 +37,15 @@ RUN mamba install conda-pack && \
 FROM debian:bullseye AS runtime
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
+# Copy /venv from the build stage
+COPY --from=build /venv /venv
+COPY --from=build /opt/athena /opt/athena
+COPY --from=build /opt/dsmap /opt/dsmap
+
+# Make bash default shell & load DSMap environment on container startup
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+RUN echo "source /venv/bin/activate" >> ~/.bashrc
+
 # Install make, zlib, and other utils required for Cromwell/womtool
 RUN apt-get clean && \
     apt-get -qqy update && \
@@ -59,26 +68,19 @@ RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
 
-# Make bash default shell & load DSMap environment on container startup
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
-RUN echo "source /venv/bin/activate" >> ~/.bashrc
-
-# Copy /venv from the build stage
-COPY --from=build /venv /venv
-COPY --from=build /opt/athena /opt/athena
-COPY --from=build /opt/dsmap /opt/dsmap
-
 # Install Athena
-RUN cd /opt/athena && \
+RUN source /venv/bin/activate && \
+    cd /opt/athena && \
     pip install -e .
 
 # Install gcloud
 ARG DEBIAN_FRONTEND=noninteractive
-RUN /opt/athena/env/install_gcloud.sh
+RUN source /venv/bin/activate && \
+    /opt/athena/config/install_gcloud.sh
 
 # Set default Cromwell server URL
-ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/ && \
-    echo "$CROMWELL_URL\nYes" | cromshell
+ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
+RUN echo "$CROMWELL_URL\nYes" | cromshell
 
 # Cromshell conflicts with Anaconda's version of curl
 # Solution: symlink /usr/bin/curl to /opt/bin/curl and add /opt/bin to $PATH

@@ -36,6 +36,14 @@ RUN mamba install conda-pack && \
 FROM debian:bullseye AS runtime
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
+# Copy /venv from the build stage
+COPY --from=build /venv /venv
+COPY --from=build /opt/athena /opt/athena
+
+# Make bash default shell & load Olympus on container startup
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+RUN echo "source /venv/bin/activate" >> ~/.bashrc
+
 # Install make and zlib
 RUN apt-get clean && \
     apt-get -qqy update && \
@@ -53,14 +61,6 @@ RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \
 # Developer aliases, etc (for convenience)
 RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
-
-# Make bash default shell & load Olympus on container startup
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
-RUN echo "source /venv/bin/activate" >> ~/.bashrc
-
-# Copy /venv from the build stage
-COPY --from=build /venv /venv
-COPY --from=build /opt/athena /opt/athena
 
 # Install Athena
 RUN cd /opt/athena && \
