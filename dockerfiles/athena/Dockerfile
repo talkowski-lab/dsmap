@@ -43,6 +43,9 @@ COPY --from=build /opt/athena /opt/athena
 # Make bash default shell & load Olympus on container startup
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 RUN echo "source /venv/bin/activate" >> ~/.bashrc
+ENV VIRTUAL_ENV=/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 
 # Install make and zlib
 RUN apt-get clean && \

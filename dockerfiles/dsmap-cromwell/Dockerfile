@@ -45,6 +45,8 @@ COPY --from=build /opt/dsmap /opt/dsmap
 # Make bash default shell & load DSMap environment on container startup
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 RUN echo "source /venv/bin/activate" >> ~/.bashrc
+ENV VIRTUAL_ENV=/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install make, zlib, and other utils required for Cromwell/womtool
 RUN apt-get clean && \
@@ -69,14 +71,12 @@ RUN echo 'alias l="ls -ltrha"' >> ~/.bashrc && \
     echo 'alias less="zless"' >> ~/.bashrc
 
 # Install Athena
-RUN source /venv/bin/activate && \
-    cd /opt/athena && \
+RUN cd /opt/athena && \
     pip install -e .
 
 # Install gcloud
 ARG DEBIAN_FRONTEND=noninteractive
-RUN source /venv/bin/activate && \
-    /opt/athena/config/install_gcloud.sh
+RUN /opt/athena/config/install_gcloud.sh
 
 # Set default Cromwell server URL
 ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
