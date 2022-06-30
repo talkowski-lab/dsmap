@@ -49,6 +49,7 @@ ENV VIRTUAL_ENV=/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install make and zlib
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get clean && \
     apt-get -qqy update && \
     apt-get -qqy install --fix-missing \
@@ -71,7 +72,6 @@ RUN cd /opt/athena && \
     pip install -e .
 
 # Install gcloud
-ARG DEBIAN_FRONTEND=noninteractive
 RUN /opt/athena/config/install_gcloud.sh
 
 # Install dsmapR package from source

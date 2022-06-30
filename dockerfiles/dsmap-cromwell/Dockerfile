@@ -49,8 +49,10 @@ ENV VIRTUAL_ENV=/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install make, zlib, and other utils required for Cromwell/womtool
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get clean && \
     apt-get -qqy update && \
+    echo -e "12\n5\n1\n" | \
     apt-get -qqy install --fix-missing \
       apt-utils \
       build-essential \
@@ -75,7 +77,6 @@ RUN cd /opt/athena && \
     pip install -e .
 
 # Install gcloud
-ARG DEBIAN_FRONTEND=noninteractive
 RUN /opt/athena/config/install_gcloud.sh
 
 # Set default Cromwell server URL
