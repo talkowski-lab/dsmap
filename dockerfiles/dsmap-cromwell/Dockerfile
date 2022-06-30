@@ -9,7 +9,7 @@
 ##################################
 
 # Base image: conda-forge's miniconda build with mamba pre-installed (for building python environment prior to conda-pack)
-FROM condaforge/mambaforge AS build
+FROM condaforge/mambaforge:4.12.0-2 AS build
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Load Athena & DSMap repos (must be present in build context)
@@ -34,7 +34,7 @@ RUN mamba install conda-pack && \
 ##############################
 
 # Base image: debian bullseye (for smaller runtime image)
-FROM debian:bullseye AS runtime
+FROM ubuntu:focal-20220531 AS runtime
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Copy /venv from the build stage
