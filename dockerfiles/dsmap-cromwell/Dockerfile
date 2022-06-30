@@ -10,6 +10,7 @@
 
 # Base image: conda-forge's miniconda build with mamba pre-installed (for building python environment prior to conda-pack)
 FROM condaforge/mambaforge:4.12.0-2 AS build
+LABEL stage=build
 MAINTAINER "Ryan Collins <rlcollins@g.harvard.edu>"
 
 # Load Athena & DSMap repos (must be present in build context)
@@ -62,7 +63,8 @@ RUN apt-get clean && \
       zip unzip \
       mailutils \
       bsdmainutils \
-      curl
+      curl \
+      wget
 
 # Increase max MySQL packet size for large UCSC queries
 RUN echo "[mysqld]\nmax_allowed_packet = 2G" > /etc/my.cnf && \

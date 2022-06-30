@@ -18,7 +18,10 @@ import argparse
 
 # Set priority of dockers to build (in order)
 # (Note: do not alter this without first confirming dependencies of base images)
-ordered_dockers = ['athena', 'athena-cloud', 'dsmap', 'dsmap-cromwell', 'dsmap-r']
+ordered_dockers = 'athena athena-cloud dsmap dsmap-cromwell dsmap-r'.split()
+clones_athena = 'athena dsmap-cromwell dsmap-r'.split()
+clones_dsmap = 'dsmap dsmap-cromwell dsmap-r'.split()
+multistage_builds = 'athena dsmap-cromwell dsmap-r'.split()
 
 
 class DockerError(Exception):
@@ -210,6 +213,7 @@ def cleanup():
 
     os.chdir(exec_dir)
     os.system('rm -rf ' + tmpdir_path)
+    os.system('docker image prune -f --filter label=stage=build')
 
 
 def main():
@@ -250,9 +254,9 @@ def main():
 
         # Clone necessary repos
         print('\nCloning required GitHub repos into local build context\n')
-        if 'athena' in dockers_to_build:
+        if len(set(dockers_to_build).intersection(set(clones_athena))) > 0:
             clone_git_repo('git@github.com:talkowski-lab/athena.git', args.athena_hash)
-        if 'dsmap' in dockers_to_build:
+        if len(set(dockers_to_build).intersection(set(clones_dsmap))) > 0:
             clone_git_repo('git@github.com:talkowski-lab/dsmap.git', args.dsmap_hash)
 
         # Build each Docker
