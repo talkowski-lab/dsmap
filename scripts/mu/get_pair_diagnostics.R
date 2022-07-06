@@ -59,7 +59,8 @@ summarize.pairs <- function(pairs){
 # Plotting functions #
 ######################
 # Barplots of bin-pair counts, optionally colored by CNV type
-plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
+plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA,
+                        label.all.x.ticks=FALSE, x.label.cex=1, x.label.las=1){
   # Set plotting values
   all.x.labels <- rownames(df)
   n.bars <- nrow(df)
@@ -77,29 +78,43 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA){
                  parmar=c(2.1, 2.8, 1.2, 0.3))
 
   # Add bars
-  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=0, ytop=df[, 1],
-       border=NA, col=bar.colors[1])
-  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 1], ytop=df[, 2],
+  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=0, ytop=df[, 2],
        border=NA, col=bar.colors[2])
+  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 2], ytop=df[, 1],
+       border=NA, col=bar.colors[1])
   rect(xleft=(1:n.bars)-1, xright=1:n.bars,
        ybottom=0, ytop=apply(df, 1, max), border="white", col=NA)
 
   # Add X axis
-  default.x.ticks <- axTicks(1)
-  x.ax.at <- default.x.ticks[-length(default.x.ticks)] + 0.5
+  if(label.all.x.ticks){
+    x.ticks <- 0:length(all.x.labels)
+  }else{
+    x.ticks <- axTicks(1)
+  }
+  x.ax.at <- x.ticks[-length(x.ticks)] + 0.5
   x.ax.labels <- all.x.labels[x.ax.at + 0.5]
   axis(1, at=c(-10e10, 10e10), col=offblack, tck=0)
   axis(1, at=x.ax.at, tck=-0.025, col=offblack, labels=NA)
-  axis(1, at=x.ax.at, tick=F, line=-0.65, labels=x.ax.labels)
+  sapply(1:length(x.ax.at), function(x){
+    axis(1, at=x.ax.at[x], tick=F, line=-0.65, labels=x.ax.labels[x],
+         cex.axis=x.label.cex, las=x.label.las)
+  })
   mtext(1, line=1.25, text=x.axis.title)
 
   # Add Y axis
   y.ax.at <- axTicks(2)
-  y.ax.labels <- prettyNum(y.ax.at / 1000, big.mark=",")
+  if(max(y.ax.at) > 1000000){
+    denom <- 1000000
+    units <- "millions"
+  }else if(max(y.ax.at) > 1000){
+    denom <- 1000
+    units <- "thousands"
+  }
+  y.ax.labels <- prettyNum(y.ax.at / denom, big.mark=",")
   axis(2, at=c(-10e10, 10e10), col=offblack, tck=0)
   axis(2, at=y.ax.at, tck=-0.025, col=offblack, labels=NA)
   axis(2, at=y.ax.at, tick=F, line=-0.65, labels=y.ax.labels, las=2)
-  mtext(2, line=1.9, text="Bin-pairs (thousands)")
+  mtext(2, line=1.9, text=paste("Bin-pairs (", units, ")", sep=""))
 
   # Add title
   mtext(3, font=2, text=title, xpd=T)
@@ -160,21 +175,27 @@ write.table(df.by.size, paste(out.prefix, "pair_counts_vs_distance.tsv", sep="."
             row.names=F, col.names=T, sep="\t", quote=F)
 
 # Plot counts per contig
-pdf(paste(out.prefix, "pair_counts_per_contig.all.pdf", sep="."), height=2.5, width=4)
+pdf(paste(out.prefix, "pair_counts_per_contig.all.pdf", sep="."),
+    height=2.5, width=4.25)
 plot.counts(pairs.dat$df.by.contig, title="All bin-pairs",
-            x.axis.title="Chromosome", cnv=cnv)
+            x.axis.title="Chromosome", cnv=cnv,
+            label.all.x.ticks=T, x.label.cex=0.85, x.label.las=2)
 dev.off()
-pdf(paste(out.prefix, "pair_counts_per_contig.training.pdf", sep="."), height=2.5, width=4)
+pdf(paste(out.prefix, "pair_counts_per_contig.training.pdf", sep="."),
+    height=2.5, width=4.25)
 plot.counts(training.dat$df.by.contig, title="Training bin-pairs",
-            x.axis.title="Chromosome", cnv=cnv)
+            x.axis.title="Chromosome", cnv=cnv,
+            label.all.x.ticks=T, x.label.cex=0.85, x.label.las=2)
 dev.off()
 
 # Plot counts vs pair distance contig
-pdf(paste(out.prefix, "pair_counts_vs.distance.all.pdf", sep="."), height=2.5, width=4)
+pdf(paste(out.prefix, "pair_counts_vs.distance.all.pdf", sep="."),
+    height=2.5, width=4.25)
 plot.counts(pairs.dat$df.by.size, title="All bin-pairs",
             x.axis.title="Pair distance (kb)", cnv=cnv)
 dev.off()
-pdf(paste(out.prefix, "pair_counts_vs.distance.training.pdf", sep="."), height=2.5, width=4)
+pdf(paste(out.prefix, "pair_counts_vs.distance.training.pdf", sep="."),
+    height=2.5, width=4.25)
 plot.counts(training.dat$df.by.size, title="Training bin-pairs",
             x.axis.title="Pair distance (kb)", cnv=cnv)
 dev.off()

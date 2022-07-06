@@ -31,7 +31,7 @@ load.calibration <- function(calibration.tsv, min.points.per.bin=100, max.bins=1
   # Read data & log-transform
   dat <- read.table(calibration.tsv, sep="\t", comment.char="", header=T)
   colnames(dat) <- c("predicted", "actual")
-  dat$predicted <- log10(dat$predicted)
+  dat$predicted <- log10(dat$predicted + (1/nrow(dat)))
 
   # Determine number of bins and bin breakpoints
   n.points <- nrow(dat)

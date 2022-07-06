@@ -67,7 +67,7 @@ for cnv in DEL DUP; do
   "TrainMuModel.shard_size_apply_mu": 100000,
   "TrainMuModel.training_mask": "gs://dsmap/data/athena/athena.hg38.training_exclusion.bed.gz",
   "TrainMuModel.vcf": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz",
-  "TrainMuModel.vcf_idx": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz"
+  "TrainMuModel.vcf_idx": "gs://dsmap/data/$tech/$cohort/$cohort.$tech.filtered.$cnv.sites.vcf.gz.tbi"
 }
 EOF
 

@@ -27,6 +27,7 @@ workflow TrainMuModel {
     String? pairs_bed_prefix
     File contigs_fai
     File training_mask
+    Array[String]? athena_training_args
     String model
     Int shard_size_apply_mu
     String cnv
@@ -90,6 +91,7 @@ workflow TrainMuModel {
       training_beds=ApplyTrainingMask.filtered_bed,
       model=model,
       contigs_fai=contigs_fai,
+      athena_training_args=athena_training_args,
       prefix="~{prefix}.~{cnv}",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_train_model
@@ -179,7 +181,7 @@ task IntersectSVs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 2.5,
+    mem_gb: 4,
     disk_gb: 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -347,6 +349,7 @@ task TrainModel {
     Array[File] training_beds
     String model
     File contigs_fai
+    Array[String]? athena_training_args
     String prefix
 
     String athena_docker
@@ -369,7 +372,7 @@ task TrainModel {
 
     # Build list of training BEDs per contig
     while read contig; do
-      fgrep "$contig.training.bed.gz" ~{write_lines(training_beds)} \
+      fgrep -w "$contig.training.bed.gz" ~{write_lines(training_beds)} \
       | awk -v OFS="\t" -v contig="$contig" '{ print contig, $0 }'
     done < <( cut -f1 ~{contigs_fai} ) \
     > training_beds.tsv
@@ -378,6 +381,7 @@ task TrainModel {
     athena mu-train \
       --training-data training_beds.tsv \
       --model ~{model} \
+      "~{sep=' ' athena_training_args}" \
       --model-outfile ~{prefix}.~{model}.trained.pkl \
       --stats-outfile ~{prefix}.~{model}.training_stats.tsv \
       --calibration-outfile ~{prefix}.~{model}.calibration.tsv
