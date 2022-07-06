@@ -374,7 +374,7 @@ task LearnPCA {
 
     # Learn PCA transformation with athena
     athena_cmd="athena eigen-bins $athena_options --bgzip"
-    athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pickle"
+    athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pkl"
     athena_cmd="$athena_cmd --whiten --fill-missing mean"
     athena_cmd="$athena_cmd --stats ~{prefix}.pca_stats.txt ~{sampled_pairs}"
     echo -e "Now learning PCA decomposition using command:\n$athena_cmd"
@@ -382,7 +382,7 @@ task LearnPCA {
   }
 
   output {
-    File pca_model = "~{prefix}.pca_model.pickle"
+    File pca_model = "~{prefix}.pca_model.pkl"
     File pc_stats = "~{prefix}.pca_stats.txt"
   }
   
