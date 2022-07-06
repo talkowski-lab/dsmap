@@ -95,7 +95,7 @@ task MergeBEDs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 2.5,
+    mem_gb: 2,
     disk_gb: 10 + ceil(2 * size(beds, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -158,7 +158,7 @@ task VisualizeFeatures {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
+    mem_gb: 2,
     disk_gb: 10 + ceil(2 * size(bed, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,

@@ -248,8 +248,8 @@ task MakeBins {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 100,
+    mem_gb: 2,
+    disk_gb: 25,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -313,9 +313,9 @@ task CalcPairsPerChrom {
   }
 
   command <<<
-    set -euo pipefail
+    set -eu -o pipefail
 
-    total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ print sum }' ~{contigs_fai} )
+    total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ printf "%.0f", sum }' ~{contigs_fai} )
     bp_per_pair=$(( ( $total_bp + ~{pairs_for_pca} - 1 ) / ~{pairs_for_pca} ))
 
     # Produces a revised .fai file with chromosome, length, and number of pairs to sample
@@ -348,9 +348,9 @@ task LearnPCA {
   }
   
   RuntimeAttr default_attr = object {
-    cpu_cores: 4, 
-    mem_gb: 16,
-    disk_gb: 250,
+    cpu_cores: 2, 
+    mem_gb: 4,
+    disk_gb: 10 + (10 * ceil(size(sampled_pairs, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

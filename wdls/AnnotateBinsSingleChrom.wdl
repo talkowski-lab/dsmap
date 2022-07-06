@@ -66,7 +66,8 @@ workflow AnnotateBinsSingleChrom {
         ref_build=ref_build,
         ref_fasta=ref_fasta,
         snv_mutrates_tsv=snv_mutrates_tsv,
-        athena_cloud_docker=athena_cloud_docker
+        athena_cloud_docker=athena_cloud_docker,
+        runtime_attr_override=runtime_attr_annotate_bins
     }
   }
 
@@ -110,8 +111,8 @@ task AnnotateBins {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
+    mem_gb: 8,
+    disk_gb: 25,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -129,7 +130,6 @@ task AnnotateBins {
     | sort -Vk1,1 -k2,2n -k3,3n \
     | bedtools merge -i - \
     > regions.bed
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     if [ "~{defined(ref_fasta)}" == "true" ]; then
       samtools faidx ~{default="empty.txt" ref_fasta}
     fi
@@ -150,6 +150,7 @@ task AnnotateBins {
       else
         remote_options=""
       fi
+      export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
       athena slice-remote $remote_options \
         --updated-tsv local_slices.tsv \
         ~{default="empty.txt" bin_annotations_list_remote} \
@@ -159,7 +160,7 @@ task AnnotateBins {
 
     # Build options for athena annotate-bins
     athena_options=""
-    if [ ! -z local_tracks.tsv ]; then
+    if [ -s local_tracks.tsv ]; then
       athena_options="$athena_options --track-list local_tracks.tsv"
     fi
     if [ "~{defined(bin_annotations_list_ucsc)}" == "true" ]; then

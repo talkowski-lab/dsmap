@@ -144,8 +144,8 @@ task MakePairs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
+    mem_gb: 2,
+    disk_gb: 20,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -214,8 +214,8 @@ task AnnotatePairs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
+    mem_gb: 2,
+    disk_gb: 10 + (10 * ceil(size(pairs, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -263,7 +263,7 @@ task AnnotatePairs {
 
     # Build options for athena annotate-pairs
     athena_options=""
-    if [ ! -z local_tracks.tsv ]; then
+    if [ -s local_tracks.pairs.tsv ]; then
       athena_options="$athena_options --track-list local_tracks.pairs.tsv"
     fi
     if [ "~{defined(pair_annotations_list_ucsc)}" == "true" ]; then
@@ -320,8 +320,8 @@ task SamplePairs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 3,
-    disk_gb: 50,
+    mem_gb: 2,
+    disk_gb: 10 + (10 * ceil(size(annotated_pairs, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
