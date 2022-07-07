@@ -80,8 +80,6 @@ RUN cd /opt/athena && \
 
 # Install gcloud
 RUN /opt/athena/config/install_gcloud.sh
-
-# Set default Cromwell server URL
 ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
 RUN echo -e "$CROMWELL_URL\nYes" | cromshell
 
