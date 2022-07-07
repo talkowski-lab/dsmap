@@ -72,6 +72,10 @@ workflow BinAndAnnotateGenome {
     RuntimeAttr? runtime_attr_apply_pca
   }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
   # Step 1. Create all 1D bins
   call MakeBins {
     input:
@@ -152,6 +156,7 @@ workflow BinAndAnnotateGenome {
 
   # Steps 4-5 are only necessary to run if decompose_features is specified
   if ( decompose_features ) { 
+<<<<<<< HEAD
 
     # Step 4.1. Merge subsampled pairs for PCA
     call Utils.MergeBEDs as MergePCAPairs {
@@ -227,6 +232,83 @@ workflow BinAndAnnotateGenome {
 
     File? feature_distribs_pre_pca = VisualizeFeatures.feature_hists
 
+=======
+
+    # Step 4.1. Merge subsampled pairs for PCA
+    call Utils.MergeBEDs as MergePCAPairs {
+      input:
+        beds=select_all(MakeAndAnnotatePairs.downsampled_pairs),
+        prefix="~{prefix}.annotated_pairs.downsampled",
+        beds_are_bgzipped=true,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_merge_pairs
+    }
+
+    # [Optional] Step 4.2. Visualize distributions of all features prior to PCA
+    if ( visualize_features_before_pca ) {
+      call Utils.VisualizeFeatures as VisualizeFeatures {
+        input:
+          bed=MergePCAPairs.merged_bed,
+          transformations_tsv=feature_transformations_tsv,
+          prefix=prefix,
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_visualize_features
+      }
+    }
+
+    # Step 4.3. Learn transformation
+    call LearnPCA {
+      input:
+        sampled_pairs=MergePCAPairs.merged_bed,
+        sampled_pairs_idx=MergePCAPairs.merged_bed_idx,
+        pca_min_variance=pca_min_variance,
+        max_pcs=max_pcs,
+        transformations_tsv=feature_transformations_tsv,
+        prefix=prefix,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_learn_pca
+    }
+
+    # Prior to Step 5, need to compose grouped inputs per chromosome
+    Array[Pair[File, File]] pairs_with_idxs = zip(MakeAndAnnotatePairs.annotated_pairs, MakeAndAnnotatePairs.annotated_pairs_idx)
+    Array[Pair[Pair[File, File], String]] inputs_for_decomp = zip(pairs_with_idxs, transpose(contigs)[0])
+
+    # Step 5. Apply PCA transformation to 2D pairs (in parallel)
+    scatter ( contig_inputs in inputs_for_decomp ) {
+
+      # For readability, extract inputs here
+      File chrom_pairs_bed = contig_inputs.left.left
+      File chrom_pairs_bed_idx = contig_inputs.left.right
+      String contig = contig_inputs.right
+
+      # Apply PCA transformation
+      call DecompAnnotationsSingleChrom.DecompAnnotationsSingleChrom as DecompAnnosPerChrom {
+        input:
+          pairs=chrom_pairs_bed,
+          pairs_idx=chrom_pairs_bed_idx,
+          pca_model=LearnPCA.pca_model,
+          contig=contig,
+          shard_size=pairs_per_shard_apply_pca,
+          prefix="~{prefix}.pairs",
+          athena_docker=athena_docker,
+          runtime_attr_chrom_shard=runtime_attr_chrom_shard,
+          runtime_attr_apply_pca=runtime_attr_apply_pca,
+          runtime_attr_merge_pairs=runtime_attr_merge_pairs
+      }
+    }
+  }
+
+  output {
+
+    Array[File] annotated_pairs = MakeAndAnnotatePairs.annotated_pairs
+    Array[File] annotated_pairs_idx = MakeAndAnnotatePairs.annotated_pairs_idx
+
+    Array[File]? decomped_pairs = DecompAnnosPerChrom.decomped_bed
+    Array[File]? decomped_pairs_idx = DecompAnnosPerChrom.decomped_bed_idx
+
+    File? feature_distribs_pre_pca = VisualizeFeatures.feature_hists
+
+>>>>>>> main
     File? eigenfeature_stats = LearnPCA.pc_stats
 
   }
@@ -313,9 +395,15 @@ task CalcPairsPerChrom {
   }
 
   command <<<
+<<<<<<< HEAD
     set -eu -o pipefail
 
     total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ printf "%.0f", sum }' ~{contigs_fai} )
+=======
+    set -euo pipefail
+
+    total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ print sum }' ~{contigs_fai} )
+>>>>>>> main
     bp_per_pair=$(( ( $total_bp + ~{pairs_for_pca} - 1 ) / ~{pairs_for_pca} ))
 
     # Produces a revised .fai file with chromosome, length, and number of pairs to sample
@@ -348,9 +436,15 @@ task LearnPCA {
   }
   
   RuntimeAttr default_attr = object {
+<<<<<<< HEAD
     cpu_cores: 2, 
     mem_gb: 4,
     disk_gb: 10 + (10 * ceil(size(sampled_pairs, "GB"))),
+=======
+    cpu_cores: 4, 
+    mem_gb: 16,
+    disk_gb: 250,
+>>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -374,7 +468,11 @@ task LearnPCA {
 
     # Learn PCA transformation with athena
     athena_cmd="athena eigen-bins $athena_options --bgzip"
+<<<<<<< HEAD
     athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pkl"
+=======
+    athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pickle"
+>>>>>>> main
     athena_cmd="$athena_cmd --whiten --fill-missing mean"
     athena_cmd="$athena_cmd --stats ~{prefix}.pca_stats.txt ~{sampled_pairs}"
     echo -e "Now learning PCA decomposition using command:\n$athena_cmd"
@@ -382,7 +480,11 @@ task LearnPCA {
   }
 
   output {
+<<<<<<< HEAD
     File pca_model = "~{prefix}.pca_model.pkl"
+=======
+    File pca_model = "~{prefix}.pca_model.pickle"
+>>>>>>> main
     File pc_stats = "~{prefix}.pca_stats.txt"
   }
   
