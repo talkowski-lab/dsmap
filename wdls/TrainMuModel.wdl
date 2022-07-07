@@ -27,7 +27,7 @@ workflow TrainMuModel {
     String? pairs_bed_prefix
     File contigs_fai
     File training_mask
-    Array[String]? athena_training_args
+    File athena_training_config
     String model
     Int shard_size_apply_mu
     String cnv
@@ -91,7 +91,7 @@ workflow TrainMuModel {
       training_beds=ApplyTrainingMask.filtered_bed,
       model=model,
       contigs_fai=contigs_fai,
-      athena_training_args=athena_training_args,
+      athena_training_config=athena_training_config,
       prefix="~{prefix}.~{cnv}",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_train_model
@@ -349,7 +349,7 @@ task TrainModel {
     Array[File] training_beds
     String model
     File contigs_fai
-    Array[String]? athena_training_args
+    File athena_training_config
     String prefix
 
     String athena_docker
@@ -378,13 +378,13 @@ task TrainModel {
     > training_beds.tsv
 
     # Train model
-    athena mu-train \
-      --training-data training_beds.tsv \
-      --model ~{model} \
-      "~{sep=' ' athena_training_args}" \
-      --model-outfile ~{prefix}.~{model}.trained.pkl \
-      --stats-outfile ~{prefix}.~{model}.training_stats.tsv \
-      --calibration-outfile ~{prefix}.~{model}.calibration.tsv
+    athena_cmd="athena mu-train --training-data training_beds.tsv"
+    athena_cmd="$athena_cmd --config ~{athena_training_config}"
+    athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pkl"
+    athena_cmd="$athena_cmd --stats-outfile ~{prefix}.~{model}.training_stats.tsv"
+    athena_cmd="$athena_cmd --calibration-outfile ~{prefix}.~{model}.calibration.tsv"
+    echo -e "Now training mutation rate model using command:\n$athena_cmd"
+    eval $athena_cmd
     gzip -f ~{prefix}.~{model}.calibration.tsv
   >>>
 

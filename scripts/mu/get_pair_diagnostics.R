@@ -80,8 +80,8 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA,
   # Add bars
   rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=0, ytop=df[, 2],
        border=NA, col=bar.colors[2])
-  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 2], ytop=df[, 1],
-       border=NA, col=bar.colors[1])
+  rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 2],
+       ytop=apply(df[, 1:2], 1, sum), border=NA, col=bar.colors[1])
   rect(xleft=(1:n.bars)-1, xright=1:n.bars,
        ybottom=0, ytop=apply(df, 1, max), border="white", col=NA)
 
