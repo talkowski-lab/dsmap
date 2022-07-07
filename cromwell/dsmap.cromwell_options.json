@@ -1,6 +1,6 @@
 {
   "workflow_failure_mode": "ContinueWhilePossible",
-  "monitoring_script": "gs://talkowski-sv-gnomad-resources/scripts/cromwell_monitoring_script.sh",
+  "monitoring_script": "gs://talkowski-sv-gnomad-resources/scripts/cromwell_monitoring_script2.sh",
   "jes_gcs_root": "gs://talkowski-sv-gnomad-cromwell-execution/",
   "google_project": "broad-dsmap",
   "final_workflow_outputs_dir": "gs://dsmap/cromwell_outputs/",

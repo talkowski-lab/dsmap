@@ -18,7 +18,10 @@ import argparse
 
 # Set priority of dockers to build (in order)
 # (Note: do not alter this without first confirming dependencies of base images)
-ordered_dockers = ['athena', 'athena-cloud', 'dsmap', 'dsmap-cromwell']
+ordered_dockers = 'athena athena-cloud dsmap dsmap-cromwell dsmap-r'.split()
+clones_athena = 'athena dsmap-cromwell dsmap-r'.split()
+clones_dsmap = 'dsmap dsmap-cromwell dsmap-r'.split()
+multistage_builds = 'athena dsmap-cromwell dsmap-r'.split()
 
 
 class DockerError(Exception):
@@ -106,7 +109,9 @@ def clone_git_repo(repo_url, hash):
     repo_name = os.path.basename(repo_url).split('.')[0]
 
     # Clone
-    ret = os.system('git clone ' + repo_url)
+    clone_cmd = 'git clone ' + repo_url + ' && '
+    clone_cmd += 'chmod a+w ' + repo_name
+    ret = os.system(clone_cmd)
     if 0 != ret:
         raise GithubError('Failed to clone ' + repo_url)
 
@@ -136,7 +141,7 @@ def format_build_args(args, docker, build_info, dockers_to_build):
         if 'athena-cloud' in dockers_to_build:
             build_args += '--build-arg ATHENA_CLOUD_BASE_IMAGE={} '.format(build_info['athena-cloud']['remote'])
 
-    elif docker == 'dsmap-cromwell':
+    elif docker in 'dsmap-cromwell dsmap-r'.split():
         # Use most recent build of dsmap base image if dsmap was also rebuilt
         if 'dsmap' in dockers_to_build:
             build_args += '--build-arg DSMAP_BASE_IMAGE={} '.format(build_info['dsmap']['remote'])
@@ -208,6 +213,7 @@ def cleanup():
 
     os.chdir(exec_dir)
     os.system('rm -rf ' + tmpdir_path)
+    os.system('docker image prune -f --filter label=stage=build')
 
 
 def main():
@@ -248,9 +254,9 @@ def main():
 
         # Clone necessary repos
         print('\nCloning required GitHub repos into local build context\n')
-        if 'athena' in dockers_to_build:
+        if len(set(dockers_to_build).intersection(set(clones_athena))) > 0:
             clone_git_repo('git@github.com:talkowski-lab/athena.git', args.athena_hash)
-        if 'dsmap' in dockers_to_build:
+        if len(set(dockers_to_build).intersection(set(clones_dsmap))) > 0:
             clone_git_repo('git@github.com:talkowski-lab/dsmap.git', args.dsmap_hash)
 
         # Build each Docker
