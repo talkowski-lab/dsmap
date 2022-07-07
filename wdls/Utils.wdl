@@ -34,13 +34,8 @@ task SingleChromShard {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-<<<<<<< HEAD
     mem_gb: 2.5,
     disk_gb: 10 + ceil(2 * size(infile, "GB")),
-=======
-    mem_gb: 4,
-    disk_gb: 250,
->>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -100,13 +95,8 @@ task MergeBEDs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-<<<<<<< HEAD
     mem_gb: 2,
     disk_gb: 10 + ceil(2 * size(beds, "GB")),
-=======
-    mem_gb: 4,
-    disk_gb: 250,
->>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -168,13 +158,8 @@ task VisualizeFeatures {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-<<<<<<< HEAD
     mem_gb: 2,
     disk_gb: 10 + ceil(2 * size(bed, "GB")),
-=======
-    mem_gb: 4,
-    disk_gb: 250,
->>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -215,7 +200,6 @@ task VisualizeFeatures {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-<<<<<<< HEAD
 
 
 # Filter an input BED versus an exclusion bed
@@ -314,5 +298,3 @@ task MakeTarball {
   }
 }
 
-=======
->>>>>>> main

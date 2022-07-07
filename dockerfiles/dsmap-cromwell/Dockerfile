@@ -81,12 +81,7 @@ RUN cd /opt/athena && \
 # Install gcloud
 RUN /opt/athena/config/install_gcloud.sh
 
-<<<<<<< HEAD
 # Set default Cromwell server URL
-=======
-# Install cromshell & set default server URL
-RUN conda install -n dsmap -y cromshell
->>>>>>> main
 ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
 RUN echo -e "$CROMWELL_URL\nYes" | cromshell
 
