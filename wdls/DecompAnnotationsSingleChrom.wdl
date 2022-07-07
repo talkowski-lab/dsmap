@@ -88,8 +88,13 @@ task DecompAnnos {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
+<<<<<<< HEAD
+    mem_gb: 2,
+    disk_gb: 10 + (10 * ceil(size(bed, "GB"))),
+=======
     mem_gb: 4,
     disk_gb: 250,
+>>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -97,7 +102,11 @@ task DecompAnnos {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
+<<<<<<< HEAD
+    set -eu -o pipefail
+=======
     set -euo pipefail
+>>>>>>> main
 
     # Apply PCA model to annotations with athena
     athena_cmd="athena eigen-bins --bgzip"

@@ -34,8 +34,13 @@ task SingleChromShard {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
+<<<<<<< HEAD
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(2 * size(infile, "GB")),
+=======
     mem_gb: 4,
     disk_gb: 250,
+>>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -95,8 +100,13 @@ task MergeBEDs {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
+<<<<<<< HEAD
+    mem_gb: 2,
+    disk_gb: 10 + ceil(2 * size(beds, "GB")),
+=======
     mem_gb: 4,
     disk_gb: 250,
+>>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -158,8 +168,13 @@ task VisualizeFeatures {
   
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
+<<<<<<< HEAD
+    mem_gb: 2,
+    disk_gb: 10 + ceil(2 * size(bed, "GB")),
+=======
     mem_gb: 4,
     disk_gb: 250,
+>>>>>>> main
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -200,3 +215,104 @@ task VisualizeFeatures {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+<<<<<<< HEAD
+
+
+# Filter an input BED versus an exclusion bed
+task ApplyExclusionBED {
+  input {
+    File inbed
+    File exbed
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(2 * size(inbed, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    bedtools intersect -v -header -wa \
+      -a ~{inbed} \
+      -b ~{exbed} \
+    | bgzip -c \
+    > ~{prefix}.bed.gz
+    tabix -f ~{prefix}.bed.gz
+  }
+
+  output {
+    File filtered_bed = "~{prefix}.bed.gz"
+    File filtered_bed_idx = "~{prefix}.bed.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Compress an aribtrary set of files into a single tarball for easy I/O
+task MakeTarball {
+  input {
+    Array[File] files_to_tar
+    String tarball_prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2,
+    disk_gb: 10 + ceil(2 * size(files_to_tar, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    mkdir ~{tarball_prefix}
+
+    mv ~{sep=" " files_to_tar} ~{tarball_prefix}/
+
+    tar -czvf ~{tarball_prefix}.tar.gz ~{tarball_prefix}
+  }
+
+  output {
+    File tarball = "~{tarball_prefix}.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+=======
+>>>>>>> main

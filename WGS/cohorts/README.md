@@ -18,6 +18,6 @@ Variant filtering criteria:
 *  VCF `FILTER` = `PASS`
 *  Maximum 1% allele frequency in each of the five superpopulations  
 *  Non-null genotypes present in >90% of all samples (>2,331/2,590)
-*  Minimum `QUAL` score of 100  
+*  Minimum `QUAL` score of 2  
 *  Appears in Hardy-Weinberg Equilibrium (_P_ > 0.01 from H-W chi-squared test)  
 

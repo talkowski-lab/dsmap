@@ -1,5 +1,5 @@
 # DSMap: genome-wide maps of human copy number mutation rates and dosage sensitivity
-# Dockerfile (with Cromwell/Cromshell enabled)
+# Dockerfile (with R installed and R libraries needed fpr plotting])
 # Copyright (c) 2021-Present Ryan L. Collins <rlcollins@g.harvard.edu> 
 # Distributed under terms of the MIT License
 
@@ -20,11 +20,11 @@ RUN cp /opt/athena/config/condarc ~/.condarc
 
 # # Create default python environment
 RUN mamba update --all && \
-    mamba env create --file=/opt/dsmap/config/environment.dsmap-cromwell.yml
+    mamba env create --file=/opt/dsmap/config/environment.dsmap-r.yml
 
 # Use conda-pack to create a standalone enviornment
 RUN mamba install conda-pack && \
-    conda-pack -n dsmap-cromwell -o /tmp/env.tar && \
+    conda-pack -n dsmap-r -o /tmp/env.tar && \
     mkdir /venv && cd /venv && tar -xf /tmp/env.tar && \
     rm /tmp/env.tar && \
     /venv/bin/conda-unpack
@@ -49,21 +49,16 @@ RUN echo "source /venv/bin/activate" >> ~/.bashrc
 ENV VIRTUAL_ENV=/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install make, zlib, and other utils required for Cromwell/womtool
+# Install make and zlib
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get clean && \
     apt-get -qqy update && \
-    echo -e "12\n5\n1\n" | \
     apt-get -qqy install --fix-missing \
       apt-utils \
       build-essential \
       zlib1g-dev \
       less \
       default-libmysqlclient-dev \
-      zip unzip \
-      mailutils \
-      bsdmainutils \
-      curl \
       wget
 
 # Increase max MySQL packet size for large UCSC queries
@@ -81,27 +76,21 @@ RUN cd /opt/athena && \
 # Install gcloud
 RUN /opt/athena/config/install_gcloud.sh
 
-<<<<<<< HEAD
-# Set default Cromwell server URL
-=======
-# Install cromshell & set default server URL
-RUN conda install -n dsmap -y cromshell
->>>>>>> main
-ENV CROMWELL_URL https://cromwell-talkowski.dsde-methods.broadinstitute.org/
-RUN echo -e "$CROMWELL_URL\nYes" | cromshell
+# Install dsmapR package from source
+ARG DSMAPR_VERSION=0.1.0
+RUN Rscript -e "install.packages('/opt/dsmap/dsmapR/dsmapR_${DSMAPR_VERSION}.tar.gz', type='source', repos=NULL)"
 
-# Cromshell conflicts with Anaconda's version of curl
-# Solution: symlink /usr/bin/curl to /opt/bin/curl and add /opt/bin to $PATH
-# /opt/bin must be added to path at the end of ~/.bashrc (rather than via ENV PATH)
-# due to conda activate prepending to the path when the container is deployed
-RUN mkdir /opt/bin && \
-    ln -s /usr/bin/curl /opt/bin/curl && \
-    echo 'export PATH="/opt/bin:$PATH"' >> ~/.bashrc
+# Install system libraries for plotting
+RUN apt-get clean && \
+    apt-get -qqy update && \
+    apt-get -qqy install libxrender1 libcairo2-dev libxt-dev libx11-dev 
+RUN apt-get -qqy upgrade
 
-# Cromshell within docker is unable to get local issuer certificate
-# Can work around this issue by replacing conda-installed cromshell with modified 
-# cromshell script that aliases curl -k and allows insecure connections
-RUN ln -sf /opt/dsmap/cromwell/cromshell_insecure_curl/cromshell $( which cromshell )
+# Install Microsoft TrueType fonts (including Arial). Necessary for rendering .pngs
+RUN apt-get clean && \
+    apt-get -qqy update && \
+    apt-get -qqy install software-properties-common && \
+    apt-get -qqy install ttf-mscorefonts-installer
 
 # Launch bash
 CMD ["/bin/bash"]
