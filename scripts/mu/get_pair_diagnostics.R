@@ -74,7 +74,7 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA,
   }
 
   # Prep plotting area
-  prep.plot.area(xlims=c(0, n.bars), ylims=c(0, max(df)),
+  prep.plot.area(xlims=c(0, n.bars), ylims=c(0, max(apply(df, 1, sum))),
                  parmar=c(2.1, 2.8, 1.2, 0.3))
 
   # Add bars
@@ -83,7 +83,7 @@ plot.counts <- function(df, title=NA, x.axis.title=NA, cnv=NA,
   rect(xleft=(1:n.bars)-1, xright=1:n.bars, ybottom=df[, 2],
        ytop=apply(df[, 1:2], 1, sum), border=NA, col=bar.colors[1])
   rect(xleft=(1:n.bars)-1, xright=1:n.bars,
-       ybottom=0, ytop=apply(df, 1, max), border="white", col=NA)
+       ybottom=0, ytop=apply(df, 1, sum), border="white", col=NA)
 
   # Add X axis
   if(label.all.x.ticks){
