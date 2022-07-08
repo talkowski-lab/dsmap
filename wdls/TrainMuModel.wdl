@@ -204,11 +204,15 @@ task IntersectSVs {
     echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
     eval $athena_cmd
     tabix -f ~{prefix}.pairs.wCounts.~{contig}.bed.gz
+
+    # Count pairs (used later in TrainMu)
+    zcat ~{pairs_bed} | grep -ve '^#' | cut -f1 | wc -l > n_pairs.txt
   }
 
   output {
     File pairs_w_counts = "~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     File pairs_w_counts_idx = "~{prefix}.pairs.wCounts.~{contig}.bed.gz.tbi"
+    Int n_pairs = read_int("n_pairs.txt")
   }
   
   runtime {
@@ -350,6 +354,7 @@ task TrainModel {
     String model
     File contigs_fai
     File athena_training_config
+    Array[Int] contig_pair_counts
     String prefix
 
     String athena_docker
@@ -370,6 +375,9 @@ task TrainModel {
   command <<<
     set -euo pipefail
 
+    # Get total number of pairs across all contigs
+    n_gw_pairs=$( python -c "print(~{sep="+" contig_pair_counts})" )
+
     # Build list of training BEDs per contig
     while read contig; do
       fgrep -w "$contig.training.bed.gz" ~{write_lines(training_beds)} \
@@ -380,7 +388,8 @@ task TrainModel {
     # Train model
     athena_cmd="athena mu-train --training-data training_beds.tsv"
     athena_cmd="$athena_cmd --config ~{athena_training_config}"
-    athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pkl"
+    athena_cmd="$athena_cmd --n-gw-pairs ~{n_gw_pairs}"
+    athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
     athena_cmd="$athena_cmd --stats-outfile ~{prefix}.~{model}.training_stats.tsv"
     athena_cmd="$athena_cmd --calibration-outfile ~{prefix}.~{model}.calibration.tsv"
     echo -e "Now training mutation rate model using command:\n$athena_cmd"
@@ -389,7 +398,7 @@ task TrainModel {
   >>>
 
   output {
-    File trained_model = "~{prefix}.~{model}.trained.pkl"
+    File trained_model = "~{prefix}.~{model}.trained.pt"
     File stats_tsv = "~{prefix}.~{model}.training_stats.tsv"
     File calibration_tsv = "~{prefix}.~{model}.calibration.tsv.gz"
   }
