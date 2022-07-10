@@ -92,6 +92,7 @@ workflow TrainMuModel {
       model=model,
       contigs_fai=contigs_fai,
       athena_training_config=athena_training_config,
+      contig_pair_counts=IntersectSVs.n_pairs,
       prefix="~{prefix}.~{cnv}",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_train_model
@@ -197,9 +198,9 @@ task IntersectSVs {
     tabix -h ~{vcf} ~{contig} | bgzip -c > ~{prefix}.~{contig}.svs.vcf.gz
 
     # Intersect variants and pairs with athena
-    athena_cmd="athena count-sv --bin-format 2D --comparison breakpoint"
-    athena_cmd="$athena_cmd --probabilities --bgzip ~{pairs_bed}"
-    athena_cmd="$athena_cmd ~{prefix}.~{contig}.svs.vcf.gz"
+    athena_cmd="athena count-sv --bin-format pairs --comparison breakpoint"
+    athena_cmd="$athena_cmd --probabilities --bgzip"
+    athena_cmd="$athena_cmd ~{prefix}.~{contig}.svs.vcf.gz ~{pairs_bed}"
     athena_cmd="$athena_cmd ~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
     eval $athena_cmd
@@ -388,7 +389,7 @@ task TrainModel {
     # Train model
     athena_cmd="athena mu-train --training-data training_beds.tsv"
     athena_cmd="$athena_cmd --config ~{athena_training_config}"
-    athena_cmd="$athena_cmd --n-gw-pairs ~{n_gw_pairs}"
+    athena_cmd="$athena_cmd --n-gw-pairs $n_gw_pairs"
     athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
     athena_cmd="$athena_cmd --stats-outfile ~{prefix}.~{model}.training_stats.tsv"
     athena_cmd="$athena_cmd --calibration-outfile ~{prefix}.~{model}.calibration.tsv"

@@ -213,7 +213,6 @@ def cleanup():
 
     os.chdir(exec_dir)
     os.system('rm -rf ' + tmpdir_path)
-    os.system('docker image prune -f --filter label=stage=build')
 
 
 def main():
@@ -263,6 +262,7 @@ def main():
         for docker in dockers_to_build:
             build_args = format_build_args(args, docker, build_info, dockers_to_build)
             build_docker(build_info[docker], build_args)
+            os.system('docker image prune -f --filter label=stage=build')
 
         # Push each built Docker if GCR project is provided
         if args.gcr_project is not None and not args.no_push:
