@@ -87,7 +87,7 @@ plot.calibration <- function(dat, cnv=NULL){
           y=c(dat$actual, rev(dat$predicted)),
           col=adjustcolor(colors$light2, alpha=0.5), border=NA)
   points(dat, col=colors$main, type="l")
-  points(dat, pch=19, cex=0.7, col=colors$main)
+  points(dat, pch=19, cex=0.5, col=colors$main)
 
   # Add legend
   legend("bottomright", legend=c("Actual", "Ideal"),
@@ -131,6 +131,6 @@ max.bins <- opts$`max-bins`
 dat <- load.calibration(calibration.tsv, min.points.per.bin, max.bins)
 
 # Plot calibration
-pdf(out.pdf, height=4, width=4)
+pdf(out.pdf, height=3, width=3)
 plot.calibration(dat, cnv)
 dev.off()
