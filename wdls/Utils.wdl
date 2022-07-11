@@ -298,3 +298,58 @@ task MakeTarball {
   }
 }
 
+
+# Plots a histogram of CNV mutation rates over all targets/query entities
+task PlotMuHist {
+  input {
+    File mu_tsv
+    String cnv
+    String? x_title
+    String? y_title
+    String out_prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(mu_tsv, "GB")),
+    boot_disk_gb: 15,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -eu -o pipefail
+
+    # Build & execute command
+    plot_cmd="/opt/dsmap/scripts/mu/plot_mu_distrib.R --cnv ~{cnv}"
+    if [ ~{defined(x_title)} == "true" ]; then
+      plot_cmd="$plot_cmd --x-title \"~{x_title}\""
+    fi
+    if [ ~{defined(y_title)} == "true" ]; then
+      plot_cmd="$plot_cmd --y-title \"~{y_title}\""
+    fi
+    plot_cmd="$plot_cmd ~{mu_tsv} ~{out_prefix}"
+    echo -e "Now plotting mutation rate histogram using command:\n$plot_cmd"
+    eval $plot_cmd
+  >>>
+
+  output {
+    File mu_hist = "~{out_prefix}.pdf"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

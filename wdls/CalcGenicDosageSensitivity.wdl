@@ -13,6 +13,7 @@
 
 version 1.0
 
+import "Utils.wdl"
 import "Structs.wdl"
 
 
@@ -30,13 +31,20 @@ workflow CalcGenicDosageSensitivity {
     File contigs_fai
     String prefix
 
+    # Diagnostics options
+    Boolean run_diagnostics = true
+
     # Dockers
     String athena_docker
+    String dsmap_r_docker
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_filter_gtf
     RuntimeAttr? runtime_attr_query_mu
     RuntimeAttr? runtime_attr_count_cnvs
+    RuntimeAttr? runtime_attr_merge_data
+    RuntimeAttr? runtime_attr_plot_mu_hist
+    RuntimeAttr? runtime_attr_merge_diagnostics
   }
 
   Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
@@ -112,12 +120,67 @@ workflow CalcGenicDosageSensitivity {
   }
 
   # Step 2c. Merge and analyze outputs from 2a & 2b
-  # TODO: implement this
-
+  # Note: for now, just merge & joint outputs. TODO: add analysis components
+  call MergeMuAndCounts as MergeHaploData {
+    input:
+      mu_tsvs=QueryMuHaplo.mu_tsv,
+      counts_tsvs=CountDel.counts_tsv,
+      prefix=prefix + ".DEL",
+      athena_docker=athena_docker,
+      runtime_attr_override=runtime_attr_merge_data
+  }
+  
   # Step 3c. Merge and analyze outputs from 3a & 3b
-  # TODO: implement this
+  # Note: for now, just merge & joint outputs. TODO: add analysis components
+  call MergeMuAndCounts as MergeTriploData {
+    input:
+      mu_tsvs=QueryMuTriplo.mu_tsv,
+      counts_tsvs=CountDup.counts_tsv,
+      prefix=prefix + ".DUP",
+      athena_docker=athena_docker,
+      runtime_attr_override=runtime_attr_merge_data
+  }
 
-  output {}
+  # Gather diagnostics, if optioned
+  if ( run_diagnostics ) {
+
+    # Plot mutation rates per gene as a sanity check
+    call Utils.PlotMuHist as PlotDelMu {
+      input:
+        mu_tsv=MergeHaploData.merged_tsv,
+        cnv="DEL",
+        x_title="Exonic deletions per allele per generation",
+        y_title="Genes",
+        out_prefix=prefix + ".DEL",
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_plot_mu_hist
+    }
+    call Utils.PlotMuHist as PlotDupMu {
+      input:
+        mu_tsv=MergeTriploData.merged_tsv,
+        cnv="DUP",
+        x_title="Whole-gene duplications per allele per generation",
+        y_title="Genes",
+        out_prefix=prefix + ".DUP",
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_plot_mu_hist
+    }
+
+    # Tar diagnostics, for convenience
+    call Utils.MakeTarball as MergeDiagnostics {
+      input:
+        files_to_tar=[PlotDelMu.mu_hist, PlotDupMu.mu_hist],
+        tarball_prefix="~{prefix}.CalcGenicDosageSensitivity.diagnostics",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_merge_diagnostics
+    }
+  }
+
+  output {
+    File haplo_data_tsv = MergeHaploData.merged_tsv
+    File triplo_data_tsv = MergeTriploData.merged_tsv
+    File? diagnostics = MergeDiagnostics.tarball
+  }
 }
 
 
@@ -278,4 +341,64 @@ task CountCnvs {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
+}
+
+
+# Merge gene-level mutation rates and CNV counts
+# TODO: add analysis component to this. Currently just merges outputs
+task MergeMuAndCounts {
+  input {
+    Array[File] mu_tsvs
+    Array[File] counts_tsvs
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override    
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(10 * size(flatten([mu_tsvs, counts_tsvs]), "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -eu -o pipefail
+
+    # Merge mutation rates
+    zcat ~{mu_tsvs[0]} | sed -n '1p' > mu.header
+    zcat ~{sep=" " mu_tsvs} | grep -ve '^#' | sort -k1,1 | cat mu.header - | gzip -c \
+    > ~{prefix}.mu.tsv.gz
+
+    # Merge counts
+    zcat ~{counts_tsvs[0]} | sed -n '1p' > counts.header
+    zcat ~{sep=" " counts_tsvs} | grep -ve '^#' | sort -k1,1 | cat counts.header - | gzip -c \
+    > ~{prefix}.counts.tsv.gz
+
+    # Join mutation rates and counts
+    join -j 1 -t $'\t' \
+      <( zcat ~{prefix}.mu.tsv.gz ) \
+      <( zcat ~{prefix}.counts.tsv.gz ) \
+    | gzip -c \
+    > ~{prefix}.mu_and_counts.tsv.gz
+  >>>
+
+  output {
+    File merged_tsv = "~{prefix}.mu_and_counts.tsv.gz"
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }  
 }
