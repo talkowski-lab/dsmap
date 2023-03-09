@@ -140,12 +140,12 @@ tabix -h $vcf $contig | bgzip -c > $prefix.$contig.svs.vcf.gz
 
 # Intersect variants with pairs
 athena count-sv \
-  --bin-format 2D \
+  --bin-format pairs \
   --comparison breakpoint \
   --probabilities \
   --bgzip \
-  $pairs_bed \
   $prefix.$contig.svs.vcf.gz \
+  $pairs_bed \
   $prefix.pairs.wCounts.$contig.bed.gz
 tabix -f $prefix.pairs.wCounts.$contig.bed.gz
 
