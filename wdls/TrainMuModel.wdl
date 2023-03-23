@@ -198,10 +198,10 @@ task IntersectSVs {
     tabix -h ~{vcf} ~{contig} | bgzip -c > ~{prefix}.~{contig}.svs.vcf.gz
 
     # Intersect variants and pairs with athena
-    athena_cmd="athena count-sv --bin-format pairs --comparison breakpoint"
+    athena_cmd="athena count-sv --query-format pairs --comparison breakpoint"
     athena_cmd="$athena_cmd --probabilities --bgzip"
+    athena_cmd="$athena_cmd --outfile ~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     athena_cmd="$athena_cmd ~{prefix}.~{contig}.svs.vcf.gz ~{pairs_bed}"
-    athena_cmd="$athena_cmd ~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
     eval $athena_cmd
     tabix -f ~{prefix}.pairs.wCounts.~{contig}.bed.gz
