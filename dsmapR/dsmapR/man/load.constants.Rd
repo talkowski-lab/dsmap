@@ -7,7 +7,7 @@
 load.constants(subset)
 }
 \arguments{
-\item{susbet}{Vector of constant groups to load See \code{Details} for options.}
+\item{subset}{Vector of constant groups to load See \code{Details} for options.}
 }
 \description{
 Load a subset of constants for DSMap analyses
