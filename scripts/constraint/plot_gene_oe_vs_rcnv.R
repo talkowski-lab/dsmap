@@ -16,6 +16,7 @@
 #########
 # Load necessary libraries
 require(dsmapR, quietly = TRUE)
+require(matrixStats, quietly = TRUE)
 require(optparse, quietly = TRUE)
 
 # Set global options and constants
@@ -50,17 +51,42 @@ load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv) {
     return(gene.scores)
 }
 
-# Compute gene O/E summary statistics per rCNV score bin
-compute.oe.by.rcnv.bin <- function(gene.scores) {
+# Compute gene O/E summary statistics with confidence intervals per rCNV score bin
+compute.oe.by.rcnv.bin <- function(gene.scores, n.bootstraps = 1000, seed = 42) {
     oe <- as.data.frame(do.call("cbind", lapply(c("DEL", "DUP"), function(cnv) {
         t(sapply(1:100, function(i) {
-            idxs <- gene.scores[, paste(cnv, "pct", sep = ".")] == i
+            idxs <- which(gene.scores[, paste(cnv, "pct", sep = ".")] == i)
             obs <- gene.scores[idxs, paste("n_svs", cnv, sep = ".")]
             exp <- gene.scores[idxs, paste("exp", cnv, sep = ".")]
-            data.frame(median(obs / exp), sum(obs) / sum(exp))
+            # Bootstrap sampling of genes
+            set.seed(seed)
+            bootstrap.idxs <- replicate(n.bootstraps, sample(idxs, length(idxs), replace = TRUE))
+            # Get obs and exp per gene in bootstrap samples
+            bootstrap.obs <- matrix(
+                gene.scores[bootstrap.idxs, paste("n_svs", cnv, sep = ".")],
+                ncol = n.bootstraps
+            )
+            bootstrap.exp <- matrix(
+                gene.scores[bootstrap.idxs, paste("exp", cnv, sep = ".")],
+                ncol = n.bootstraps
+            )
+            # Compute confidence intervals on bin summary statistics
+            bootstrap.medians <- colMedians(bootstrap.obs / bootstrap.exp)
+            median.ci <- quantile(bootstrap.medians, c(0.05, 0.95))
+            bootstrap.sums <- colSums(bootstrap.obs) / colSums(bootstrap.exp)
+            sums.ci <- quantile(bootstrap.sums, c(0.05, 0.95))
+            data.frame(
+                median(obs / exp), median.ci[1], median.ci[2],
+                sum(obs) / sum(exp), sums.ci[1], sums.ci[2]
+            )
         }))
     })))
-    colnames(oe) <- c("median.DEL", "sum.DEL", "median.DUP", "sum.DUP")
+    colnames(oe) <- c(
+        "median.DEL", "median.DEL.lower", "median.DEL.upper",
+        "sum.DEL", "sum.DEL.lower", "sum.DEL.upper",
+        "median.DUP", "median.DUP.lower", "median.DUP.upper",
+        "sum.DUP", "sum.DUP.lower", "sum.DUP.upper"
+    )
     return(oe)
 }
 
@@ -81,67 +107,79 @@ compute.cor <- function(oe) {
 # Plot O/Es of genes by their rCNV score bin
 plot.rcnv.bin.oe <- function(dat, cors) {
     par(mfrow = c(2, 2), mar = c(2, 3.5, 2, 1.5))
-    plot(as.numeric(dat$sum.DEL),
+    plot(
+        as.numeric(dat$sum.DEL),
         pch = 19, col = DEL.colors$main,
         xaxt = "n", xlab = "", ylab = "", las = 2, main = "DEL Obs/Exp (Bin-wide Mean)",
         panel.first = c(abline(h = 1, lty = 5))
     )
+    polygon(
+        x = c(1:100, rev(1:100)),
+        y = c(dat$sum.DEL.upper, rev(dat$sum.DEL.lower)),
+        col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
+    )
     title(
         main = paste(
-            "Spearman rho =",
-            round(cors[cors$sum.type == "sum.DEL", "estimate"], 3),
-            "; p =",
-            formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
-        ),
-        outer = FALSE, line = -1, cex.main = 1, font.main = 1
+            "Spearman rho =", round(cors[cors$sum.type == "sum.DEL", "estimate"], 3),
+            "; p =", formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
+        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
     )
     mtext(1, text = "Genes Binned by pHaplo Percentile")
     mtext(2, line = 2.5, text = "Observed / Expected")
-    plot(as.numeric(dat$sum.DUP),
+    plot(
+        as.numeric(dat$sum.DUP),
         pch = 19, col = DUP.colors$main,
         xaxt = "n", xlab = "", ylab = "", las = 2, main = "DUP Obs/Exp (Bin-wide Mean)",
         panel.first = c(abline(h = 1, lty = 5))
     )
+    polygon(
+        x = c(1:100, rev(1:100)),
+        y = c(dat$sum.DUP.upper, rev(dat$sum.DUP.lower)),
+        col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
+    )
     title(
         main = paste(
-            "Spearman rho =",
-            round(cors[cors$sum.type == "sum.DUP", "estimate"], 3),
-            "; p =",
-            formatC(cors[cors$sum.type == "sum.DUP", "p"], format = "e", digits = 1)
-        ),
-        outer = FALSE, line = -1, cex.main = 1, font.main = 1
+            "Spearman rho =", round(cors[cors$sum.type == "sum.DUP", "estimate"], 3),
+            "; p =", formatC(cors[cors$sum.type == "sum.DUP", "p"], format = "e", digits = 1)
+        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
     )
     mtext(1, text = "Genes Binned by pTriplo Percentile")
     mtext(2, line = 2.5, text = "Observed / Expected")
-    plot(as.numeric(dat$median.DEL),
+    plot(
+        as.numeric(dat$median.DEL),
         pch = 21, col = DEL.colors$main,
         xaxt = "n", xlab = "", ylab = "", las = 2, main = "DEL Obs/Exp (Median Gene)",
         panel.first = c(abline(h = 1, lty = 5))
     )
+    polygon(
+        x = c(1:100, rev(1:100)),
+        y = c(dat$median.DEL.upper, rev(dat$median.DEL.lower)),
+        col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
+    )
     title(
         main = paste(
-            "Spearman rho =",
-            round(cors[cors$sum.type == "median.DEL", "estimate"], 3),
-            "; p =",
-            formatC(cors[cors$sum.type == "median.DEL", "p"], format = "e", digits = 1)
-        ),
-        outer = FALSE, line = -1, cex.main = 1, font.main = 1
+            "Spearman rho =", round(cors[cors$sum.type == "median.DEL", "estimate"], 3),
+            "; p =", formatC(cors[cors$sum.type == "median.DEL", "p"], format = "e", digits = 1)
+        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
     )
     mtext(1, text = "Genes Binned by pHaplo Percentile")
     mtext(2, line = 2.5, text = "Observed / Expected")
-    plot(as.numeric(dat$median.DUP),
+    plot(
+        as.numeric(dat$median.DUP),
         pch = 21, col = DUP.colors$main,
         xaxt = "n", xlab = "", ylab = "", las = 2, main = "DUP Obs/Exp (Median Gene)",
         panel.first = c(abline(h = 1, lty = 5))
     )
+    polygon(
+        x = c(1:100, rev(1:100)),
+        y = c(dat$median.DUP.upper, rev(dat$median.DUP.lower)),
+        col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
+    )
     title(
         main = paste(
-            "Spearman rho =",
-            round(cors[cors$sum.type == "median.DUP", "estimate"], 3),
-            "; p =",
-            formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
-        ),
-        outer = FALSE, line = -1, cex.main = 1, font.main = 1
+            "Spearman rho =", round(cors[cors$sum.type == "median.DUP", "estimate"], 3),
+            "; p =", formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
+        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
     )
     mtext(1, text = "Genes Binned by pTriplo Percentile")
     mtext(2, line = 2.5, text = "Observed / Expected")
@@ -167,12 +205,7 @@ opts <- args$options
 
 # Checks for appropriate positional arguments
 if (length(args$args) != 4) {
-    stop(
-        paste(
-            "Four positional arguments required: del.tsv, dup.tsv, rcnv.tsv, and out.pdf\n",
-            sep = " "
-        )
-    )
+    stop(paste("Four positional arguments required: del.tsv, dup.tsv, rcnv.tsv, and out.pdf"))
 }
 
 # Writes args & opts to vars
