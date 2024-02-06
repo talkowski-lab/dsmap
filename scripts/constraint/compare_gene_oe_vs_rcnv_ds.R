@@ -29,7 +29,7 @@ dsmapR::load.constants(c("colors"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv) {
+load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv, n.bins = 100) {
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "gene"
     dup <- read.table(dup.tsv, header = TRUE, sep = "\t", comment.char = "")
@@ -43,8 +43,8 @@ load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv) {
     gene.scores <- merge(gene.scores, rcnv.scores, by = "gene", all = FALSE, sort = FALSE)
 
     # Percentiles of pHaplo & pTriplo
-    gene.scores$DEL.pct <- ceiling(100 * rank(gene.scores$pHaplo) / nrow(gene.scores))
-    gene.scores$DUP.pct <- ceiling(100 * rank(gene.scores$pTriplo) / nrow(gene.scores))
+    gene.scores$bin.DEL <- ceiling(n.bins * rank(gene.scores$pHaplo) / nrow(gene.scores))
+    gene.scores$bin.DUP <- ceiling(n.bins * rank(gene.scores$pTriplo) / nrow(gene.scores))
 
     # Compute expected # of dels & dups given sample size
     gene.scores$exp.DEL <- (10^gene.scores$mu.DEL) * 2 * n.samples
@@ -57,10 +57,10 @@ load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv) {
 }
 
 # Compute gene O/E summary statistics with confidence intervals per rCNV score bin
-compute.oe.stats.by.rcnv.bin <- function(gene.scores, n.bootstraps = 1000, seed = 42) {
+compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 1000, seed = 42) {
     oe.stats <- do.call("cbind", lapply(c("DEL", "DUP"), function(cnv) {
-        do.call("rbind", lapply(1:100, function(i) {
-            idxs <- which(gene.scores[, paste(cnv, "pct", sep = ".")] == i)
+        cbind(1:n.bins, do.call("rbind", lapply(1:n.bins, function(i) {
+            idxs <- which(gene.scores[, paste("bin", cnv, sep = ".")] == i)
             obs <- gene.scores[idxs, paste("n_svs", cnv, sep = ".")]
             exp <- gene.scores[idxs, paste("exp", cnv, sep = ".")]
 
@@ -85,16 +85,17 @@ compute.oe.stats.by.rcnv.bin <- function(gene.scores, n.bootstraps = 1000, seed 
             sums.ci <- quantile(bootstrap.sums, c(0.05, 0.95))
             data.frame(
                 median(obs / exp), median.ci[1], median.ci[2],
-                sum(obs) / sum(exp), sums.ci[1], sums.ci[2]
+                sum(obs) / sum(exp), sums.ci[1], sums.ci[2],
+                mad(obs / exp)
             )
-        }))
+        })))
     }))
-    colnames(oe.stats) <- c(
-        "median.DEL", "median.DEL.lower", "median.DEL.upper",
-        "sum.DEL", "sum.DEL.lower", "sum.DEL.upper",
-        "median.DUP", "median.DUP.lower", "median.DUP.upper",
-        "sum.DUP", "sum.DUP.lower", "sum.DUP.upper"
-    )
+    colnames(oe.stats) <- do.call("c", lapply(c("DEL", "DUP"), function(cnv) {
+        paste(c(
+            "bin", "median", "median.lower", "median.upper",
+            "sum", "sum.lower", "sum.upper", "mad"
+        ), cnv, sep = ".")
+    }))
     return(oe.stats)
 }
 
@@ -103,7 +104,7 @@ compute.cor <- function(oe.stats) {
     cors <- do.call("rbind", lapply(seq_along(oe.stats), function(i) {
         cor.vals <- cor.test(
             seq_along(oe.stats[, i]), unlist(oe.stats[, i]),
-            method = "spearman"
+            method = "spearman", exact = FALSE
         )
         data.frame(names(oe.stats)[i], cor.vals$estimate, cor.vals$p.value)
     }))
@@ -112,41 +113,32 @@ compute.cor <- function(oe.stats) {
 }
 
 # Compute robust Z-scores of O/Es for genes within each rCNV score bin
-compute.z.by.rcnv.bin <- function(gene.scores) {
+compute.z.by.bin <- function(gene.scores, bin.stats) {
     zs.by.cnv <- lapply(c("DEL", "DUP"), function(cnv) {
-        # Calculate median and MAD O/Es per bin
-        bin.stats <- cbind(pct = 1:100, do.call("rbind", lapply(
-            1:100,
-            function(i) {
-                oes <- gene.scores[
-                    gene.scores[, paste(cnv, "pct", sep = ".")] == i,
-                    paste("oe", cnv, sep = ".")
-                ]
-                data.frame(bin.median.oe = median(oes), bin.mad.oe = mad(oes))
-            }
-        )))
-        colnames(bin.stats) <- paste(cnv, colnames(bin.stats), sep = ".")
-
         # Annotate genes with bin-level median and MAD O/E
         scores <- merge(
             gene.scores[, c(
                 "gene",
-                paste(cnv, "pct", sep = "."),
+                paste("bin", cnv, sep = "."),
                 paste("n_svs", cnv, sep = "."),
                 paste("exp", cnv, sep = "."),
                 paste("oe", cnv, sep = ".")
-            )], bin.stats,
-            by = paste(cnv, "pct", sep = ".")
+            )], bin.stats[, c(
+                paste("bin", cnv, sep = "."),
+                paste("median", cnv, sep = "."),
+                paste("mad", cnv, sep = ".")
+            )],
+            by = paste("bin", cnv, sep = ".")
+        )
+        colnames(scores)[(ncol(scores) - 1):ncol(scores)] <- c(
+            paste("bin.median", cnv, sep = "."),
+            paste("bin.mad", cnv, sep = ".")
         )
 
         # Calculate gene robust Z-scores
-        scores <- cbind(
-            scores,
-            (scores[, paste("oe", cnv, sep = ".")] -
-                scores[, paste(cnv, "bin.median.oe", sep = ".")]) /
-                scores[, paste(cnv, "bin.mad.oe", sep = ".")]
-        )
-        colnames(scores)[length(colnames(scores))] <- paste(cnv, "bin.z", sep = ".")
+        scores[, paste("bin.z", cnv, sep = ".")] <- (scores[, paste("oe", cnv, sep = ".")] -
+            scores[, paste("bin.median", cnv, sep = ".")]) /
+            scores[, paste("bin.mad", cnv, sep = ".")]
         return(scores)
     })
     return(merge(zs.by.cnv[[1]], zs.by.cnv[[2]], by = "gene"))
@@ -166,14 +158,14 @@ plot.rcnv.bin.oe <- function(dat, cors) {
         panel.first = c(abline(h = 1, lty = 5))
     )
     polygon(
-        x = c(1:100, rev(1:100)),
-        y = c(dat$sum.DEL.upper, rev(dat$sum.DEL.lower)),
+        x = c(1:nrow(dat), rev(1:nrow(dat))),
+        y = c(dat$sum.upper.DEL, rev(dat$sum.lower.DEL)),
         col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
     )
     title(
         main = paste(
             "Spearman rho =", round(cors[cors$sum.type == "sum.DEL", "estimate"], 3),
-            "; p =", formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
+            "; p =", formatC(cors[cors$sum.type == "sum.DEL", "p"], format = "e", digits = 1)
         ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
     )
     mtext(1, text = "Genes Binned by pHaplo Percentile")
@@ -186,8 +178,8 @@ plot.rcnv.bin.oe <- function(dat, cors) {
         panel.first = c(abline(h = 1, lty = 5))
     )
     polygon(
-        x = c(1:100, rev(1:100)),
-        y = c(dat$sum.DUP.upper, rev(dat$sum.DUP.lower)),
+        x = c(1:nrow(dat), rev(1:nrow(dat))),
+        y = c(dat$sum.upper.DUP, rev(dat$sum.lower.DUP)),
         col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
     )
     title(
@@ -206,8 +198,8 @@ plot.rcnv.bin.oe <- function(dat, cors) {
         panel.first = c(abline(h = 1, lty = 5))
     )
     polygon(
-        x = c(1:100, rev(1:100)),
-        y = c(dat$median.DEL.upper, rev(dat$median.DEL.lower)),
+        x = c(1:nrow(dat), rev(1:nrow(dat))),
+        y = c(dat$median.upper.DEL, rev(dat$median.lower.DEL)),
         col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
     )
     title(
@@ -226,8 +218,8 @@ plot.rcnv.bin.oe <- function(dat, cors) {
         panel.first = c(abline(h = 1, lty = 5))
     )
     polygon(
-        x = c(1:100, rev(1:100)),
-        y = c(dat$median.DUP.upper, rev(dat$median.DUP.lower)),
+        x = c(1:nrow(dat), rev(1:nrow(dat))),
+        y = c(dat$median.upper.DUP, rev(dat$median.lower.DUP)),
         col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
     )
     title(
@@ -245,7 +237,12 @@ plot.rcnv.bin.oe <- function(dat, cors) {
 # RScript #
 ###########
 # List of command-line options
-option_list <- list()
+option_list <- list(
+    make_option(c("--n-bins"),
+        help = "Number of bins to divide genes into.",
+        type = "integer", default = 100
+    )
+)
 # TODO: Parameterize CNV type, rCNV score type, bin quantile size?
 
 # Get command-line arguments & options
@@ -273,40 +270,41 @@ del.tsv <- args$args[1]
 dup.tsv <- args$args[2]
 rcnv.tsv <- args$args[3]
 out.pdf <- args$args[4]
-out_genes_del.tsv <- args$args[5]
-out_genes_dup.tsv <- args$args[6]
+out.genes.del.tsv <- args$args[5]
+out.genes.dup.tsv <- args$args[6]
+n.bins <- opts$`n-bins`
 
 # Load gene obs, mus, exps, and rCNV scores
-gene.scores <- load.gene.scores(del.tsv, dup.tsv, rcnv.tsv)
+gene.scores <- load.gene.scores(del.tsv, dup.tsv, rcnv.tsv, n.bins)
 
-# # Compute gene O/E summary statistics per rCNV score bin
-# oe.stats <- compute.oe.stats.by.rcnv.bin(gene.scores)
+# Compute gene O/E summary statistics per rCNV score bin
+oe.stats <- compute.oe.stats.by.bin(gene.scores, n.bins)
 
-# # Compute correlations for each O/E summary statistic type with rCNV score percentile
-# cors <- compute.cor(oe.stats)
+# Compute correlations for each O/E summary statistic type with rCNV score percentile
+cors <- compute.cor(oe.stats)
 
-# # Plot O/Es of genes by their rCNV score bin
-# pdf(out.pdf, height = 5, width = 10)
-# plot.rcnv.bin.oe(oe.stats, cors)
-# dev.off()
+# Plot O/Es of genes by their rCNV score bin
+pdf(out.pdf, height = 5, width = 10)
+plot.rcnv.bin.oe(oe.stats, cors)
+dev.off()
 
 # Compute robust Z-scores for O/Es of genes within rCNV score bins
-zs <- compute.z.by.rcnv.bin(gene.scores)
+zs <- compute.z.by.bin(gene.scores, oe.stats)
 
 # Output genes ranked by robust Z-score
 write.table(
     zs[
-        order(abs(zs$DEL.bin.z), decreasing = TRUE),
+        order(abs(zs$bin.z.DEL), decreasing = TRUE),
         c("gene", colnames(zs)[grepl("DEL", colnames(zs))])
     ],
-    out_genes_del.tsv,
+    out.genes.del.tsv,
     row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
 )
 write.table(
     zs[
-        order(abs(zs$DUP.bin.z), decreasing = TRUE),
+        order(abs(zs$bin.z.DUP), decreasing = TRUE),
         c("gene", colnames(zs)[grepl("DUP", colnames(zs))])
     ],
-    out_genes_dup.tsv,
+    out.genes.dup.tsv,
     row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
 )
