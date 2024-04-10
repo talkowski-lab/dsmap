@@ -140,7 +140,7 @@ workflow BinAndAnnotateGenome {
         ref_fasta=ref_fasta,
         bin_size=bin_size,
         sample_pairs_for_pca=decompose_features,
-        pairs_to_sample_for_pca=contig[2],
+        #pairs_to_sample_for_pca=contig[2],
         athena_docker=athena_docker,
         athena_cloud_docker=athena_cloud_docker,
         runtime_attr_chrom_shard=runtime_attr_chrom_shard,
