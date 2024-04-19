@@ -17,9 +17,11 @@ Additional details for each dataset are provided in the table below:
 ### Athena hg38 neutral region mask  
 This mask reflects the union of:  
 
-1. Mammalian conserved regions per 91-way GERP (downloaded from Ensembl v103), and
+1. Mammalian conserved regions per 91-way GERP (downloaded from Ensembl v103), 
 
-2. Exons from genes with any marginal evidence of constraint against coding variants.  
+2. Constrained 1kb windows of the genome from gnomAD v3.1 (Z > 3), and
+
+3. Exons from genes with any marginal evidence of constraint against coding variants.  
 
 Specifically, the exons in `2` were taken from any transcript in Gencode v37 with:  
 *  observed/expected loss-of-function variants < 1 in gnomAD v2.1.1, or

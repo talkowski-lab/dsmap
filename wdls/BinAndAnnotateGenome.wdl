@@ -56,6 +56,7 @@ workflow BinAndAnnotateGenome {
 
     # Dockers
     String athena_docker
+    String athena_docker_dev #TODO: REVERT THIS TO athena_docker ONCE DEBUGGING COMPLETE
     String athena_cloud_docker
 
     # Runtime overrides
@@ -185,7 +186,7 @@ workflow BinAndAnnotateGenome {
         max_pcs=max_pcs,
         transformations_tsv=feature_transformations_tsv,
         prefix=prefix,
-        athena_docker=athena_docker,
+        athena_docker=athena_docker_dev,
         runtime_attr_override=runtime_attr_learn_pca
     }
 
@@ -210,7 +211,7 @@ workflow BinAndAnnotateGenome {
           contig=contig,
           shard_size=pairs_per_shard_apply_pca,
           prefix="~{prefix}.pairs",
-          athena_docker=athena_docker,
+          athena_docker=athena_docker_dev,
           runtime_attr_chrom_shard=runtime_attr_chrom_shard,
           runtime_attr_apply_pca=runtime_attr_apply_pca,
           runtime_attr_merge_pairs=runtime_attr_merge_pairs
@@ -375,8 +376,8 @@ task LearnPCA {
 
     # Learn PCA transformation with athena
     athena_cmd="athena eigen-bins $athena_options --bgzip"
-    athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pkl"
-    athena_cmd="$athena_cmd --whiten --fill-missing mean"
+    athena_cmd="$athena_cmd --parameters-outfile ~{prefix}.pca_model.pkl --whiten"
+    athena_cmd="$athena_cmd --cap-predictions --symmetric-cap --fill-missing mean"
     athena_cmd="$athena_cmd --stats ~{prefix}.pca_stats.txt ~{sampled_pairs}"
     echo -e "Now learning PCA decomposition using command:\n$athena_cmd"
     eval $athena_cmd

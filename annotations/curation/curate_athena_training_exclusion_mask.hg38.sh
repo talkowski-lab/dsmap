@@ -12,7 +12,7 @@
 
 
 # Launch Docker
-docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-7411a1-722506
+docker run --rm -it us.gcr.io/broad-dsmap/dsmap-cromwell:wgs-mu-dev-hg38-97e064-ae06a9
 
 # Authenticate GCP credentials
 gcloud auth login
@@ -27,15 +27,21 @@ wget ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_37/gencode.
 # Download hg38 GERP elements from Ensembl v103
 wget http://ftp.ensembl.org/pub/release-103/bed/ensembl-compara/90_mammals.gerp_constrained_element/gerp_constrained_elements.homo_sapiens.bb
 
+# Download gnomAD v3.1 noncoding constraint Z-scores
+wget https://storage.googleapis.com/gnomad-nc-constraint-v31-paper/download_files/constraint_z_genome_1kb.qc.download.txt.gz
+zcat constraint_z_genome_1kb.qc.download.txt.gz | sed '1d' | bgzip -c \
+> constraint_z_genome_1kb.qc.download.noheader.bed.gz
+
 # Convert GERP from BigBed to BED
 cd opt/bin && \
 wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/bigBedToBed && \
 chmod a+x bigBedToBed && \
 bigBedToBed \
-  gerp_constrained_elements.homo_sapiens.bb \
-  gerp_constrained_elements.homo_sapiens.bed
+  /gerp_constrained_elements.homo_sapiens.bb \
+  /gerp_constrained_elements.homo_sapiens.bed && \
+cd /
 sort -Vk1,1 -k2,2n -k3,3n \
-  gerp_constrained_elements.homo_sapiens.bed \
+  /gerp_constrained_elements.homo_sapiens.bed \
 | awk '{ print "chr"$0 }' \
 | bgzip -c \
 > gerp_constrained_elements.homo_sapiens.bed.gz
@@ -44,7 +50,8 @@ tabix -f gerp_constrained_elements.homo_sapiens.bed.gz
 # Create athena neutral sites mask
 /opt/dsmap/scripts/annotations/make_athena_training_mask.py \
   --gtf gencode.v37.annotation.gtf.gz \
-  --constraint gnomad.v2.1.1.lof_metrics.by_transcript.txt.bgz \
+  --gene-constraint gnomad.v2.1.1.lof_metrics.by_transcript.txt.bgz \
+  --bin-constraint constraint_z_genome_1kb.qc.download.noheader.bed.gz \
   --gerp gerp_constrained_elements.homo_sapiens.bed.gz \
   --outfile athena.hg38.training_exclusion.bed.gz \
   --bgzip

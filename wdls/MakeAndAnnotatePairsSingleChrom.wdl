@@ -283,7 +283,7 @@ task AnnotatePairs {
     athena_cmd="athena annotate-pairs --bgzip --no-ucsc-chromsplit $athena_options"
     athena_cmd="$athena_cmd ~{pairs} ~{out_prefix}.annotated.pairs.bed.gz"
     echo -e "Now pairing bins using command:\n$athena_cmd"
-    eval $athena_cmd 2> >(fgrep -v "is marked as paired, but its mate does not occur" >&2)
+    eval $athena_cmd
     tabix -f ~{out_prefix}.annotated.pairs.bed.gz
   }
 
