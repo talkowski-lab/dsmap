@@ -70,16 +70,18 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--gtf', required=True, help='Input GTF')
-    parser.add_argument('--constraint', required=True, help='Input gnomAD ' + 
-                        'constraint .tsv')
+    parser.add_argument('--gene-constraint', required=True, help='Input gnomAD ' + 
+                        'genic constraint .tsv')
+    parser.add_argument('--bin-constraint', required=True, help='Input gnomAD ' + 
+                        'binned genomic constraint .bed')
     parser.add_argument('--gerp', required=True, help='Input GERP BED file')
     parser.add_argument('--outfile', required=True, help='Output BED')
     parser.add_argument('-z', '--bgzip', action='store_true', help='Compress ' +
                         'output with bgzip')
     args = parser.parse_args()
 
-    # Load and filter gnomAD constraint data
-    tx_ids = load_constraint(args.constraint)
+    # Load and filter gnomAD gene constraint data
+    tx_ids = load_constraint(args.gene_constraint)
 
     # Parse gtf and extract exons from transcripts in tx_ids
     exons_bt = get_exons(args.gtf, tx_ids)
@@ -87,8 +89,13 @@ def main():
     # Load GERP elements
     gerp_bt = pbt.BedTool(args.gerp).sort().merge().saveas()
 
+    # Load gnomAD binwise constraint
+    constr_bt = pbt.BedTool(args.bin_constraint).\
+                    filter(lambda bin: float(bin.fields[-1]) >= 3).\
+                    sort().merge().saveas()
+
     # Merge exons & GERP elements
-    mask_bt = exons_bt.cat(gerp_bt).sort().merge().saveas()
+    mask_bt = exons_bt.cat(gerp_bt).cat(constr_bt).sort().merge().saveas()
     
     # Write to file
     outfile = args.outfile
