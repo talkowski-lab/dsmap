@@ -230,6 +230,7 @@ workflow BinAndAnnotateGenome {
 
     File? feature_distribs_pre_pca = VisualizeFeatures.feature_hists
 
+    File? pca_model = LearnPCA.pca_model
     File? eigenfeature_stats = LearnPCA.pc_stats
 
   }
