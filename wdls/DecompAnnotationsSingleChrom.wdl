@@ -97,7 +97,7 @@ task DecompAnnos {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Apply PCA model to annotations with athena
     athena_cmd="athena eigen-bins --bgzip"

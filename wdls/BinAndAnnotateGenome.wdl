@@ -317,7 +317,7 @@ task CalcPairsPerChrom {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
     
     # Produces a TSV file with chromosome, length, and number of pairs to sample
     if [ "~{defined(pairs_for_pca)}" == "true" ]; then

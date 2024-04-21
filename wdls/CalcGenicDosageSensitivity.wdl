@@ -208,7 +208,7 @@ task FilterGtf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Subset GTF to exons
     tabix -h ~{gtf} ~{contig} | awk '{ if ($3 == "exon") print $0 }' | bgzip -c \
@@ -266,7 +266,7 @@ task QueryMuForGtf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Query mutation rates
     athena_cmd="athena mu-query --gzip -o ~{prefix}.mu.tsv.gz"
@@ -318,7 +318,7 @@ task CountCnvs {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Count SVs
     athena_cmd="athena count-sv --query-format gtf --outfile ~{output_prefix}.tsv.gz"
@@ -368,7 +368,7 @@ task MergeMuAndCounts {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Merge mutation rates
     zcat ~{mu_tsvs[0]} | sed -n '1p' > mu.header

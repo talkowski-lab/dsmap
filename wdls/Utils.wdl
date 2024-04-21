@@ -324,7 +324,7 @@ task PlotMuHist {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
     # Build & execute command
     plot_cmd="/opt/dsmap/scripts/mu/plot_mu_distrib.R --cnv ~{cnv}"
