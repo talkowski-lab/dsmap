@@ -86,10 +86,11 @@ workflow BinAndAnnotateGenome {
   }
 
   # Prior to parallelizing per chromosome, must determine number of pairs to sample
-  # Note: If decompose_features is false, number of pairs is 0 for all chromosomes
+  # Note: If decompose_features is false, number of pairs will always be 0 for all chromosomes
   call CalcPairsPerChrom {
     input:
       contigs_fai=contigs_fai,
+      compute_pairs=decompose_features,
       pairs_for_pca=pairs_for_pca,
       prefix=prefix,
       athena_docker=athena_docker
@@ -300,6 +301,7 @@ task MakeBins {
 task CalcPairsPerChrom {
   input {
     File contigs_fai
+    Boolean compute_pairs
     Int? pairs_for_pca = 100000
     String prefix
 
@@ -320,7 +322,7 @@ task CalcPairsPerChrom {
     set -euo pipefail
     
     # Produces a TSV file with chromosome, length, and number of pairs to sample
-    if [ "~{defined(pairs_for_pca)}" == "true" ]; then
+    if [ "~{compute_pairs}" == "true" ] && [ "~{defined(pairs_for_pca)}" == "true" ]; then
       total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ printf "%.0f", sum }' ~{contigs_fai} )
       bp_per_pair=$(( ( $total_bp + ~{pairs_for_pca} - 1 ) / ~{pairs_for_pca} ))
       
