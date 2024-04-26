@@ -37,6 +37,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
 
     Boolean sample_pairs_for_pca = true
     Int? pairs_to_sample_for_pca = 0
+    Int? sampling_seed = 42
 
     String athena_docker
     String athena_cloud_docker
@@ -109,6 +110,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
         annotated_pairs=MergeAnnotatedPairs.merged_bed,
         annotated_pairs_idx=MergeAnnotatedPairs.merged_bed_idx,
         sample_size=pairs_to_sample_for_pca,
+        sampling_seed=sampling_seed,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_sample_pairs
     }
@@ -312,6 +314,7 @@ task SamplePairs {
     File annotated_pairs
     File annotated_pairs_idx
     Int? sample_size
+    Int? sampling_seed
     
     String athena_docker
 
@@ -335,8 +338,20 @@ task SamplePairs {
 
     tabix -H ~{annotated_pairs} > header.bed
 
+    if [ "~{defined(sampling_seed)}" == "true" ]; then
+      # Set fixed source of randomness in shuffle using sampling seed
+      get_seeded_random()
+      {
+        openssl enc -aes-256-ctr -pass pass:"$1" -nosalt </dev/zero 2>/dev/null
+      }
+
+      random_option="--random-source=<( get_seeded_random ~{sampling_seed} )"
+    else
+      random_option=""
+    fi
+
     zcat ~{annotated_pairs} | grep -ve '^#' \
-    | shuf -n ~{sample_size} --random-source=<( zcat ~{annotated_pairs} ) \
+    | shuf -n ~{sample_size} $random_option \
     | sort -Vk1,1 -k2,2n -k3,3n \
     | cat header.bed - \
     | bgzip -c \
