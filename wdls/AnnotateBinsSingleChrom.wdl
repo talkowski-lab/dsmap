@@ -166,6 +166,9 @@ task AnnotateBins {
     if [ "~{defined(bin_annotations_list_ucsc)}" == "true" ]; then
       athena_options="$athena_options --ucsc-list ~{default='empty.txt' bin_annotations_list_ucsc}"
     fi
+    if [ "~{defined(ref_build)}" == "true" ]; then
+      athena_options="$athena_options --ucsc-ref ~{default='' ref_build}"
+    fi
     if [ "~{defined(ref_fasta)}" == "true" ]; then
       athena_options="$athena_options --fasta ~{default='empty.txt' ref_fasta}"
     fi
@@ -174,7 +177,7 @@ task AnnotateBins {
     fi
 
     # Annotate bins with athena
-    athena_cmd="athena annotate-bins --ucsc-ref ~{ref_build} $athena_options"
+    athena_cmd="athena annotate-bins $athena_options"
     athena_cmd="$athena_cmd --no-ucsc-chromsplit --bgzip"
     athena_cmd="$athena_cmd ~{bed} ~{out_prefix}.annotated.bed.gz"
     echo -e "Now annotating using command:\n$athena_cmd"
