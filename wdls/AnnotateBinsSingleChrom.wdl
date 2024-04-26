@@ -4,7 +4,7 @@
 #
 # AnnotateBinsSingleChrom.wdl
 #
-# Parallelized annotation of  bins on a single chromosome
+# Parallelized annotation of bins on a single chromosome
 #
 # Copyright (c) 2021-Present Ryan L. Collins and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
@@ -87,7 +87,7 @@ workflow AnnotateBinsSingleChrom {
 }
 
 
-# Annotate a BED file of  bins
+# Annotate a BED file of bins
 task AnnotateBins {
   input {
     File bed
