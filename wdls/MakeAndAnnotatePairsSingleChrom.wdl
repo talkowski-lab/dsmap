@@ -333,7 +333,7 @@ task SamplePairs {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  command {
+  command <<<
     set -euo pipefail
 
     tabix -H ~{annotated_pairs} > header.bed
@@ -357,7 +357,7 @@ task SamplePairs {
     | bgzip -c \
     > ~{out_prefix}.downsampled.bed.gz
     tabix -f ~{out_prefix}.downsampled.bed.gz
-  }
+  >>>
 
   output {
     File sampled_pairs = "~{out_prefix}.downsampled.bed.gz"
