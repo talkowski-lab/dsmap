@@ -56,7 +56,6 @@ workflow BinAndAnnotateGenome {
 
     # Dockers
     String athena_docker
-    String athena_docker_dev #TODO: REVERT THIS TO athena_docker ONCE DEBUGGING COMPLETE
     String athena_cloud_docker
 
     # Runtime overrides
@@ -186,7 +185,7 @@ workflow BinAndAnnotateGenome {
         max_pcs=max_pcs,
         transformations_tsv=feature_transformations_tsv,
         prefix=prefix,
-        athena_docker=athena_docker_dev,
+        athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_learn_pca
     }
 
@@ -211,7 +210,7 @@ workflow BinAndAnnotateGenome {
           contig=contig,
           shard_size=pairs_per_shard_apply_pca,
           prefix="~{prefix}.pairs",
-          athena_docker=athena_docker_dev,
+          athena_docker=athena_docker,
           runtime_attr_chrom_shard=runtime_attr_chrom_shard,
           runtime_attr_apply_pca=runtime_attr_apply_pca,
           runtime_attr_merge_pairs=runtime_attr_merge_pairs
