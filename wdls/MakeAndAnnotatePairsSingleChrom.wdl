@@ -350,12 +350,13 @@ task SamplePairs {
       random_option=""
     fi
 
-    zcat ~{annotated_pairs} | grep -ve '^#' \
+    downsample_cmd="zcat ~{annotated_pairs} | grep -ve '^#' \
     | shuf -n ~{sample_size} $random_option \
     | sort -Vk1,1 -k2,2n -k3,3n \
     | cat header.bed - \
     | bgzip -c \
-    > ~{out_prefix}.downsampled.bed.gz
+    > ~{out_prefix}.downsampled.bed.gz"
+    eval "$downsample_cmd"    
     tabix -f ~{out_prefix}.downsampled.bed.gz
   >>>
 
