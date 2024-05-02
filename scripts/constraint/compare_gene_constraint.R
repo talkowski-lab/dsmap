@@ -8,8 +8,12 @@
 # Distributed under terms of the MIT License (see LICENSE)
 # Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
 
-# Plot gene DEL and DUP observed/expected values (O/Es) by rCNV pHaplo or pTriplo bin
-# and write out genes ranked by discordance of O/Es vs. rCNV scores
+# Plot gene DEL and DUP DSMap observed/expected values (O/Es) against constraint metrics:
+# 1. rCNV pHaplo or pTriplo,
+# 2. LOEUF,
+# 3. minimum missense constraint region O/E,
+# 4. v4 exome gene O/Es.
+# Write out genes ranked by discordance of DSMap O/Es vs. other constraint metrics
 
 
 #########
@@ -30,6 +34,9 @@ dsmapR::load.constants(c("colors"))
 ##################
 # Load data
 load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv, n.bins = 100) {
+    # Load data files:
+    # gene observed & expected del & dup counts
+    # gene rCNV pHaplo & pTriplo scores
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "gene"
     dup <- read.table(dup.tsv, header = TRUE, sep = "\t", comment.char = "")
@@ -38,19 +45,19 @@ load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv, n.bins = 100) {
     rcnv.scores <- read.table(rcnv.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(rcnv.scores)[1] <- "gene"
 
-    # Merge data
+    # Merge data by gene
     gene.scores <- merge(del, dup, by = "gene", all = FALSE, suffixes = c(".DEL", ".DUP"), sort = FALSE)
     gene.scores <- merge(gene.scores, rcnv.scores, by = "gene", all = FALSE, sort = FALSE)
 
-    # Percentiles of pHaplo & pTriplo
+    # Calculate percentiles of pHaplo & pTriplo
     gene.scores$bin.DEL <- ceiling(n.bins * rank(gene.scores$pHaplo) / nrow(gene.scores))
     gene.scores$bin.DUP <- ceiling(n.bins * rank(gene.scores$pTriplo) / nrow(gene.scores))
 
-    # Compute expected # of dels & dups given sample size
+    # Compute expected # of gene dels & dups given sample size
     gene.scores$exp.DEL <- (10^gene.scores$mu.DEL) * 2 * n.samples
     gene.scores$exp.DUP <- (10^gene.scores$mu.DUP) * 2 * n.samples
 
-    # Compute obs/exp
+    # Compute gene O/E
     gene.scores$oe.DEL <- gene.scores$n_svs.DEL / gene.scores$exp.DEL
     gene.scores$oe.DUP <- gene.scores$n_svs.DUP / gene.scores$exp.DUP
     return(gene.scores)
@@ -60,6 +67,7 @@ load.gene.scores <- function(del.tsv, dup.tsv, rcnv.tsv, n.bins = 100) {
 compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 1000, seed = 42) {
     oe.stats <- do.call("cbind", lapply(c("DEL", "DUP"), function(cnv) {
         cbind(1:n.bins, do.call("rbind", lapply(1:n.bins, function(i) {
+            # Get obs and exp for genes in bin
             idxs <- which(gene.scores[, paste("bin", cnv, sep = ".")] == i)
             obs <- gene.scores[idxs, paste("n_svs", cnv, sep = ".")]
             exp <- gene.scores[idxs, paste("exp", cnv, sep = ".")]
@@ -68,7 +76,7 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
             set.seed(seed)
             bootstrap.idxs <- replicate(n.bootstraps, sample(idxs, length(idxs), replace = TRUE))
 
-            # Get obs and exp per gene in bootstrap samples
+            # Get obs and exp for genes in bootstrap samples
             bootstrap.obs <- matrix(
                 gene.scores[bootstrap.idxs, paste("n_svs", cnv, sep = ".")],
                 ncol = n.bootstraps
@@ -78,11 +86,13 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
                 ncol = n.bootstraps
             )
 
-            # Compute confidence intervals on bin summary statistics
+            # Compute bootstrap confidence intervals on bin summary statistics
             bootstrap.medians <- colMedians(bootstrap.obs / bootstrap.exp)
             median.ci <- quantile(bootstrap.medians, c(0.05, 0.95))
             bootstrap.sums <- colSums(bootstrap.obs) / colSums(bootstrap.exp)
             sums.ci <- quantile(bootstrap.sums, c(0.05, 0.95))
+
+            # Return bin sum stat point estimates and CIs
             data.frame(
                 median(obs / exp), median.ci[1], median.ci[2],
                 sum(obs) / sum(exp), sums.ci[1], sums.ci[2],
@@ -238,17 +248,18 @@ plot.rcnv.bin.oe <- function(dat, cors) {
 ###########
 # List of command-line options
 option_list <- list(
-    make_option(c("--n-bins"),
-        help = "Number of bins to divide genes into.",
-        type = "integer", default = 100
+    make_option("--n-bins",
+        type = "integer", default = 100,
+        help = "Number of bins to divide genes into (default %default)."
     )
 )
 # TODO: Parameterize CNV type, rCNV score type, bin quantile size?
 
 # Get command-line arguments & options
+arg_list <- c("del.tsv", "dup.tsv", "constraint.tsv", "out.pdf", "out_genes_del.tsv", "out_genes_dup.tsv")
 args <- parse_args(
     OptionParser(
-        usage = "%prog del.tsv dup.tsv rcnv.tsv out.pdf out_genes_del.tsv out_genes_dup.tsv",
+        usage = paste("%prog", paste0(arg_list, collapse = " ")),
         option_list = option_list
     ),
     positional_arguments = TRUE
@@ -256,11 +267,11 @@ args <- parse_args(
 opts <- args$options
 
 # Checks for appropriate positional arguments
-if (length(args$args) != 6) {
+if (length(args$args) != length(arg_list)) {
     stop(
         paste(
-            "Six positional arguments required:",
-            "del.tsv, dup.tsv, rcnv.tsv, out.pdf, out_genes_del.tsv, and out_genes_dup.tsv"
+            length(arg_list), "positional arguments required:",
+            paste0(arg_list, collapse = ", ")
         )
     )
 }
@@ -308,3 +319,52 @@ write.table(
     out.genes.dup.tsv,
     row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
 )
+# print(paste0(
+#     "# genes with 0 obs DELs: ", sum(zs$n_svs.DEL == 0),
+#     " (", round(sum(zs$n_svs.DEL == 0) / nrow(zs) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# genes with 0 exp DELs: ", sum(zs$exp.DEL == 0),
+#     " (", round(sum(zs$exp.DEL == 0) / nrow(zs) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# bins with DEL O/E median of 0: ", sum(oe.stats$median.DEL == 0),
+#     " (", round(sum(oe.stats$median.DEL == 0) / nrow(oe.stats) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# bins with DEL O/E MAD of 0: ", sum(oe.stats$mad.DEL == 0),
+#     " (", round(sum(oe.stats$mad.DEL == 0) / nrow(oe.stats) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# genes with abs(DEL O/E Z) > 3 in bins with median & MAD O/E > 0: ",
+#     sum((abs(zs$bin.z.DEL) > 3) & (zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))),
+#     " (", round(
+#         sum((abs(zs$bin.z.DEL) > 3) & (zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))) /
+#             sum((zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))) * 100, 1
+#     ), "%)"
+# ))
+# print("###########################")
+# print(paste0(
+#     "# genes with 0 obs DUPs: ", sum(zs$n_svs.DUP == 0),
+#     " (", round(sum(zs$n_svs.DUP == 0) / nrow(zs) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# genes with 0 exp DUPs: ", sum(zs$exp.DUP == 0),
+#     " (", round(sum(zs$exp.DUP == 0) / nrow(zs) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# bins with DUP O/E median of 0: ", sum(oe.stats$median.DUP == 0),
+#     " (", round(sum(oe.stats$median.DUP == 0) / nrow(oe.stats) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# bins with DUP O/E MAD of 0: ", sum(oe.stats$mad.DUP == 0),
+#     " (", round(sum(oe.stats$mad.DUP == 0) / nrow(oe.stats) * 100, 1), "%)"
+# ))
+# print(paste0(
+#     "# genes with abs(DUP O/E Z) > 3 in bins with median & MAD O/E > 0: ",
+#     sum((abs(zs$bin.z.DUP) > 3) & (zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))),
+#     " (", round(
+#         sum((abs(zs$bin.z.DUP) > 3) & (zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))) /
+#             sum((zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))) * 100, 1
+#     ), "%)"
+# ))
