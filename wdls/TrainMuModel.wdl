@@ -61,25 +61,50 @@ workflow TrainMuModel {
     File pairs_bed = pairs_bucket + "/" + pairs_filename + "." + contig + ".bed.gz" 
     File pairs_bed_idx = pairs_bed + ".tbi" 
 
-    # Step 1. Intersect CNVs with bin-pairs
-    call IntersectSVs {
+    # Step 1a. Intersect CNVs with bin-pairs using probability for model with binary outcomes
+    call IntersectSVs as IntersectSVsProbabilities{
       input:
         vcf=vcf,
         vcf_idx=vcf_idx,
         pairs_bed=pairs_bed,
         pairs_bed_idx=pairs_bed_idx,
+        probabilities=true,
         contig=contig,
         prefix="~{prefix}.~{cnv}",
         athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr_intersect_svs
     }
 
-    # Step 2. Apply training mask
-    call Utils.ApplyExclusionBED as ApplyTrainingMask {
+    # Step 1b. Intersect CNVs with bin-pairs using counts for model with quantitative outcomes
+    call IntersectSVs as IntersectSVsCounts{
       input:
-        inbed=IntersectSVs.pairs_w_counts,
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        pairs_bed=pairs_bed,
+        pairs_bed_idx=pairs_bed_idx,
+        probabilities=false,
+        contig=contig,
+        prefix="~{prefix}.~{cnv}",
+        athena_cloud_docker=athena_cloud_docker,
+        runtime_attr_override=runtime_attr_intersect_svs
+    }
+
+    # Step 2a. Apply training mask to CNV probability data
+    call Utils.ApplyExclusionBED as ApplyTrainingMaskProbabilities {
+      input:
+        inbed=IntersectSVsProbabilities.pairs_w_counts,
         exbed=training_mask,
-        prefix=basename(IntersectSVs.pairs_w_counts, ".bed.gz") + ".training",
+        prefix=basename(IntersectSVsProbabilities.pairs_w_counts, ".bed.gz") + ".training",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_apply_training_mask
+    }
+
+    # Step 2b. Apply training mask to CNV count data
+    call Utils.ApplyExclusionBED as ApplyTrainingMaskCounts {
+      input:
+        inbed=IntersectSVsCounts.pairs_w_counts,
+        exbed=training_mask,
+        prefix=basename(IntersectSVsCounts.pairs_w_counts, ".bed.gz") + ".training",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_apply_training_mask
     }
@@ -88,11 +113,11 @@ workflow TrainMuModel {
   # Step 3. Train mutation rate model
   call TrainModel {
     input:
-      training_beds=ApplyTrainingMask.filtered_bed,
+      training_beds=ApplyTrainingMaskProbabilities.filtered_bed,
       model=model,
       contigs_fai=contigs_fai,
       athena_training_config=athena_training_config,
-      contig_pair_counts=IntersectSVs.n_pairs,
+      contig_pair_counts=IntersectSVsProbabilities.n_pairs,
       prefix="~{prefix}.~{cnv}",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_train_model
@@ -100,7 +125,7 @@ workflow TrainMuModel {
 
   # Step 4. Apply mutation rate model to all bin-pairs, parallelized per chromosome
   # Prepare inputs for scatter
-  Array[Pair[File, File]] predict_mu_beds_and_indexes = zip(IntersectSVs.pairs_w_counts, IntersectSVs.pairs_w_counts_idx)
+  Array[Pair[File, File]] predict_mu_beds_and_indexes = zip(IntersectSVsProbabilities.pairs_w_counts, IntersectSVsProbabilities.pairs_w_counts_idx)
   Array[Pair[String, Pair[File, File]]] predict_mu_inputs = zip(contigs, predict_mu_beds_and_indexes)
 
   # Scatter over chromosomes and apply mu model
@@ -126,8 +151,10 @@ workflow TrainMuModel {
     # Get stats of bin-pairs before and after applying training mask
     call GetPairDiagnostics {
       input:
-        all_pairs=IntersectSVs.pairs_w_counts,
-        training_pairs=ApplyTrainingMask.filtered_bed,
+        all_pairs_probs=IntersectSVsProbabilities.pairs_w_counts,
+        all_pairs_counts=IntersectSVsCounts.pairs_w_counts,
+        training_pairs_probs=ApplyTrainingMaskProbabilities.filtered_bed,
+        training_pairs_counts=ApplyTrainingMaskCounts.filtered_bed,
         cnv=cnv,
         prefix="~{prefix}.~{cnv}",
         dsmap_r_docker=dsmap_r_docker,
@@ -172,6 +199,7 @@ task IntersectSVs {
     File vcf_idx
     File pairs_bed
     File pairs_bed_idx
+    Boolean probabilities
     String contig
     String prefix
     
@@ -199,7 +227,7 @@ task IntersectSVs {
 
     # Intersect variants and pairs with athena
     athena_cmd="athena count-sv --query-format pairs --comparison breakpoint"
-    athena_cmd="$athena_cmd --probabilities --bgzip"
+    athena_cmd="$athena_cmd ${true='--probabilities' false='' probabilities} --bgzip"
     athena_cmd="$athena_cmd --outfile ~{prefix}.pairs.wCounts.~{contig}.bed.gz"
     athena_cmd="$athena_cmd ~{prefix}.~{contig}.svs.vcf.gz ~{pairs_bed}"
     echo -e "Now intersecting SVs and bins using command:\n$athena_cmd"
@@ -231,8 +259,10 @@ task IntersectSVs {
 # Collect diagnostic stats and plots for bin-pairs before and after filtering to training set
 task GetPairDiagnostics {
   input {
-    Array[File] all_pairs
-    Array[File] training_pairs
+    Array[File] all_pairs_probs
+    Array[File] all_pairs_counts
+    Array[File] training_pairs_probs
+    Array[File] training_pairs_counts
     String cnv
     String prefix
 
@@ -244,7 +274,7 @@ task GetPairDiagnostics {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 10 + ceil(2 * (size(all_pairs, "GB") + size(training_pairs, "GB"))),
+    disk_gb: 10 + ceil(2 * (size(all_pairs_probs, "GB") + size(all_pairs_counts, "GB") + size(training_pairs_probs, "GB") + size(training_pairs_counts, "GB"))),
     boot_disk_gb: 20,
     preemptible_tries: 3,
     max_retries: 1
@@ -254,24 +284,38 @@ task GetPairDiagnostics {
   command {
     set -euo pipefail
 
-    # Merge bin-pairs and keep first four columns only
-    zcat ~{all_pairs[0]} | sed -n '1p' | cut -f1-4 > pairs.bed
-    zcat ~{sep=" " all_pairs} | grep -ve '^#' | cut -f1-4 >> pairs.bed
-    bgzip -f pairs.bed
-    tabix -f pairs.bed.gz
+    # Merge bin-pairs with probabilities and keep first four columns only
+    zcat ~{all_pairs_probs[0]} | sed -n '1p' | cut -f1-4 > pairs.probs.bed
+    zcat ~{sep=" " all_pairs_probs} | grep -ve '^#' | cut -f1-4 >> pairs.probs.bed
+    bgzip -f pairs.probs.bed
+    tabix -f pairs.probs.bed.gz
 
-    # Merge training bin-pairs and keep first four columns only
-    zcat ~{training_pairs[0]} | sed -n '1p' | cut -f1-4 > training.bed
-    zcat ~{sep=" " training_pairs} | grep -ve '^#' | cut -f1-4 >> training.bed
-    bgzip -f training.bed
-    tabix -f training.bed.gz
+    # Merge bin-pairs with counts and keep first four columns only
+    zcat ~{all_pairs_counts[0]} | sed -n '1p' | cut -f1-4 > pairs.counts.bed
+    zcat ~{sep=" " all_pairs_counts} | grep -ve '^#' | cut -f1-4 >> pairs.counts.bed
+    bgzip -f pairs.counts.bed
+    tabix -f pairs.counts.bed.gz
+
+    # Merge training bin-pairs with probabilities and keep first four columns only
+    zcat ~{training_pairs_probs[0]} | sed -n '1p' | cut -f1-4 > training.probs.bed
+    zcat ~{sep=" " training_pairs_probs} | grep -ve '^#' | cut -f1-4 >> training.probs.bed
+    bgzip -f training.probs.bed
+    tabix -f training.probs.bed.gz
+
+    # Merge training bin-pairs with counts and keep first four columns only
+    zcat ~{training_pairs_counts[0]} | sed -n '1p' | cut -f1-4 > training.counts.bed
+    zcat ~{sep=" " training_pairs_counts} | grep -ve '^#' | cut -f1-4 >> training.counts.bed
+    bgzip -f training.counts.bed
+    tabix -f training.counts.bed.gz
 
     # Get diagnostics
     mkdir outputs/
     /opt/dsmap/scripts/mu/get_pair_diagnostics.R \
       --cnv ~{cnv} \
-      pairs.bed.gz \
-      training.bed.gz \
+      pairs.probs.bed.gz \
+      pairs.counts.bed.gz \
+      training.probs.bed.gz \
+      training.counts.bed.gz \
       outputs/~{prefix}
   }
 
