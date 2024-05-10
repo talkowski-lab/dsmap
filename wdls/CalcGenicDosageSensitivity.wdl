@@ -52,7 +52,7 @@ workflow CalcGenicDosageSensitivity {
   # Parallelize per chromosome
   scatter ( contig in contigs ) {
 
-    # Step 1. Filter GTF to exons and gene bodies
+    # Step 1. Filter GTF to coding sequences and gene bodies
     call FilterGtf {
       input:
         gtf=gtf,
@@ -62,58 +62,85 @@ workflow CalcGenicDosageSensitivity {
         runtime_attr_override=runtime_attr_filter_gtf
     }
 
-    # Step 2a. Compute mutation rates for all exon-overlapping deletions per gene
     File del_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DEL." + contig + ".mu.bed.gz"
     File del_mu_bed_idx = del_mu_bed + ".tbi"
-    call QueryMuForGtf as QueryMuHaplo {
+    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP." + contig + ".mu.bed.gz"
+    File dup_mu_bed_idx = dup_mu_bed + ".tbi" 
+
+    # Step 2a. Compute mutation rates for all CDS-overlapping deletions per gene
+    call QueryMuForGtf as QueryMuCodingDel {
       input:
-        gtf=FilterGtf.exons_gtf,
-        gtf_idx=FilterGtf.exons_gtf_idx,
+        gtf=FilterGtf.coding_gtf,
+        gtf_idx=FilterGtf.coding_gtf_idx,
         mu_bed=del_mu_bed,
         mu_bed_idx=del_mu_bed_idx,
         athena_query_options=[""],
-        prefix=basename(FilterGtf.exons_gtf, ".gtf.gz") + ".DEL",
+        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DEL.CDS",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 2b. Count exon-overlapping deletions per gene
-    call CountCnvs as CountDel {
+    # Step 2b. Count CDS-overlapping deletions per gene
+    call CountCnvs as CountCodingDel {
       input:
         vcf=del_vcf,
         vcf_idx=del_vcf_idx,
-        gtf=FilterGtf.exons_gtf,
-        gtf_idx=FilterGtf.exons_gtf_idx,
+        gtf=FilterGtf.coding_gtf,
+        gtf_idx=FilterGtf.coding_gtf_idx,
         athena_countsv_options=[""],
-        output_prefix=basename(FilterGtf.exons_gtf, ".gtf.gz") + ".DEL.counts",
+        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DEL.CDS.counts",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_cnvs
     }
 
-    # Step 3a. Compute mutation rates for all copy-gain duplications per gene
-    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP." + contig + ".mu.bed.gz"
-    File dup_mu_bed_idx = dup_mu_bed + ".tbi" 
-    call QueryMuForGtf as QueryMuTriplo {
+    # Step 3a. Compute mutation rates for all CDS-overlapping duplications per gene
+    call QueryMuForGtf as QueryMuCodingDup {
+      input:
+        gtf=FilterGtf.coding_gtf,
+        gtf_idx=FilterGtf.coding_gtf_idx,
+        mu_bed=dup_mu_bed,
+        mu_bed_idx=dup_mu_bed_idx,
+        athena_query_options=[""],
+        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DUP.CDS",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_query_mu
+    }
+
+    # Step 3b. Count CDS-overlapping duplications per gene
+    call CountCnvs as CountCodingDup {
+      input:
+        vcf=dup_vcf,
+        vcf_idx=dup_vcf_idx,
+        gtf=FilterGtf.coding_gtf,
+        gtf_idx=FilterGtf.coding_gtf_idx,
+        athena_countsv_options=[""],
+        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DUP.CDS.counts",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_count_cnvs
+    }
+
+    # Step 4a. Compute mutation rates for all copy-gain duplications per gene
+    call QueryMuForGtf as QueryMuCopyGainDup {
       input:
         gtf=FilterGtf.genes_gtf,
         gtf_idx=FilterGtf.genes_gtf_idx,
         mu_bed=dup_mu_bed,
         mu_bed_idx=dup_mu_bed_idx,
         athena_query_options=["--fraction 1.0"],
-        prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP",
+        prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP.CG",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 3b. Count copy-gain duplications per gene
-    call CountCnvs as CountDup {
+    # Step 4b. Count copy-gain duplications per gene
+    call CountCnvs as CountCopyGainDup {
       input:
         vcf=dup_vcf,
         vcf_idx=dup_vcf_idx,
         gtf=FilterGtf.genes_gtf,
         gtf_idx=FilterGtf.genes_gtf_idx,
         athena_countsv_options=["--fraction 1.0"],
-        output_prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP.counts",
+        prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP.CG.counts",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_cnvs
     }
@@ -121,22 +148,33 @@ workflow CalcGenicDosageSensitivity {
 
   # Step 2c. Merge and analyze outputs from 2a & 2b
   # Note: for now, just merge & joint outputs. TODO: add analysis components
-  call MergeMuAndCounts as MergeHaploData {
+  call MergeMuAndCounts as MergeCodingDelData {
     input:
-      mu_tsvs=QueryMuHaplo.mu_tsv,
-      counts_tsvs=CountDel.counts_tsv,
-      prefix=prefix + ".DEL",
+      mu_tsvs=QueryMuCodingDel.mu_tsv,
+      counts_tsvs=CountCodingDel.counts_tsv,
+      prefix=prefix + ".DEL.CDS",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
   
   # Step 3c. Merge and analyze outputs from 3a & 3b
   # Note: for now, just merge & joint outputs. TODO: add analysis components
-  call MergeMuAndCounts as MergeTriploData {
+  call MergeMuAndCounts as MergeCodingDupData {
     input:
-      mu_tsvs=QueryMuTriplo.mu_tsv,
-      counts_tsvs=CountDup.counts_tsv,
-      prefix=prefix + ".DUP",
+      mu_tsvs=QueryMuCodingDup.mu_tsv,
+      counts_tsvs=CountCodingDup.counts_tsv,
+      prefix=prefix + ".DUP.CDS",
+      athena_docker=athena_docker,
+      runtime_attr_override=runtime_attr_merge_data
+  }
+
+  # Step 4c. Merge and analyze outputs from 4a & 4b
+  # Note: for now, just merge & joint outputs. TODO: add analysis components
+  call MergeMuAndCounts as MergeCopyGainDupData {
+    input:
+      mu_tsvs=QueryMuCopyGainDup.mu_tsv,
+      counts_tsvs=CountCopyGainDup.counts_tsv,
+      prefix=prefix + ".DUP.CG",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
@@ -145,23 +183,33 @@ workflow CalcGenicDosageSensitivity {
   if ( run_diagnostics ) {
 
     # Plot mutation rates per gene as a sanity check
-    call Utils.PlotMuHist as PlotDelMu {
+    call Utils.PlotMuHist as PlotCodingDelMu {
       input:
-        mu_tsv=MergeHaploData.merged_tsv,
+        mu_tsv=MergeCodingDelData.merged_tsv,
         cnv="DEL",
-        x_title="Exonic deletions per allele per generation",
+        x_title="Coding deletions per allele per generation",
         y_title="Genes",
-        out_prefix=prefix + ".DEL",
+        out_prefix=prefix + ".DEL.CDS",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
-    call Utils.PlotMuHist as PlotDupMu {
+    call Utils.PlotMuHist as PlotCodingDupMu {
       input:
-        mu_tsv=MergeTriploData.merged_tsv,
+        mu_tsv=MergeCodingDupData.merged_tsv,
+        cnv="DUP",
+        x_title="Coding duplications per allele per generation",
+        y_title="Genes",
+        out_prefix=prefix + ".DUP.CDS",
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_plot_mu_hist
+    }
+    call Utils.PlotMuHist as PlotCopyGainDupMu {
+      input:
+        mu_tsv=MergeCopyGainDupData.merged_tsv,
         cnv="DUP",
         x_title="Whole-gene duplications per allele per generation",
         y_title="Genes",
-        out_prefix=prefix + ".DUP",
+        out_prefix=prefix + ".DUP.CG",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
@@ -169,7 +217,7 @@ workflow CalcGenicDosageSensitivity {
     # Tar diagnostics, for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
-        files_to_tar=[PlotDelMu.mu_hist, PlotDupMu.mu_hist],
+        files_to_tar=[PlotCodingDelMu.mu_hist, PlotCodingDupMu.mu_hist, PlotCopyGainDupMu.mu_hist],
         tarball_prefix="~{prefix}.CalcGenicDosageSensitivity.diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_merge_diagnostics
@@ -177,14 +225,15 @@ workflow CalcGenicDosageSensitivity {
   }
 
   output {
-    File haplo_data_tsv = MergeHaploData.merged_tsv
-    File triplo_data_tsv = MergeTriploData.merged_tsv
+    File coding_del_data_tsv = MergeCodingDelData.merged_tsv
+    File coding_dup_data_tsv = MergeCodingDupData.merged_tsv
+    File copy_gain_dup_data_tsv = MergeCopyGainDupData.merged_tsv
     File? diagnostics = MergeDiagnostics.tarball
   }
 }
 
 
-# Filter GTF to a single chromosome and subsets of exons or gene bodies
+# Filter GTF to a single chromosome and subsets of CDSs or gene bodies
 task FilterGtf {
   input {
     File gtf
@@ -210,20 +259,20 @@ task FilterGtf {
   command <<<
     set -euo pipefail
 
-    # Subset GTF to exons
-    tabix -h ~{gtf} ~{contig} | awk '{ if ($3 == "exon") print $0 }' | bgzip -c \
-    > ~{gtf_prefix}.exons.~{contig}.gtf.gz
-    tabix -f ~{gtf_prefix}.exons.~{contig}.gtf.gz
+    # Subset GTF to coding sequences
+    tabix -h ~{gtf} ~{contig} | awk '{ if ($3 == "CDS") print $0 }' | bgzip -c \
+    > ~{gtf_prefix}.coding.~{contig}.gtf.gz
+    tabix -f ~{gtf_prefix}.coding.~{contig}.gtf.gz
 
-    # Subset gtf to gene bodies
+    # Subset GTF to gene bodies
     tabix -h ~{gtf} ~{contig} | awk '{ if ($3 == "gene") print $0 }' | bgzip -c \
     > ~{gtf_prefix}.genes.~{contig}.gtf.gz
     tabix -f ~{gtf_prefix}.genes.~{contig}.gtf.gz
   >>>
 
   output {
-    File exons_gtf = "~{gtf_prefix}.exons.~{contig}.gtf.gz"
-    File exons_gtf_idx = "~{gtf_prefix}.exons.~{contig}.gtf.gz.tbi"
+    File coding_gtf = "~{gtf_prefix}.coding.~{contig}.gtf.gz"
+    File coding_gtf_idx = "~{gtf_prefix}.coding.~{contig}.gtf.gz.tbi"
     File genes_gtf = "~{gtf_prefix}.genes.~{contig}.gtf.gz"
     File genes_gtf_idx = "~{gtf_prefix}.genes.~{contig}.gtf.gz.tbi"
   }
@@ -300,7 +349,7 @@ task CountCnvs {
     File gtf
     File gtf_idx
     Array[String]? athena_countsv_options = [""]
-    String output_prefix
+    String prefix
 
     String athena_docker
 
@@ -321,7 +370,7 @@ task CountCnvs {
     set -euo pipefail
 
     # Count SVs
-    athena_cmd="athena count-sv --query-format gtf --outfile ~{output_prefix}.tsv.gz"
+    athena_cmd="athena count-sv --query-format gtf --outfile ~{prefix}.tsv.gz"
     athena_cmd="$athena_cmd --bgzip  ~{sep=' ' athena_countsv_options}"
     athena_cmd="$athena_cmd ~{vcf} ~{gtf}"
     echo -e "Now counting SVs using command:\n$athena_cmd"
@@ -329,7 +378,7 @@ task CountCnvs {
   >>>
 
   output {
-    File counts_tsv = "~{output_prefix}.tsv.gz"
+    File counts_tsv = "~{prefix}.tsv.gz"
   }
   
   runtime {
