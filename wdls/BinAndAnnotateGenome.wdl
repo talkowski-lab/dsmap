@@ -56,7 +56,6 @@ workflow BinAndAnnotateGenome {
 
     # Dockers
     String athena_docker
-    String athena_docker_dev #TODO: REVERT THIS TO athena_docker ONCE DEBUGGING COMPLETE
     String athena_cloud_docker
 
     # Runtime overrides
@@ -86,17 +85,17 @@ workflow BinAndAnnotateGenome {
   }
 
   # Prior to parallelizing per chromosome, must determine number of pairs to sample
-  if ( decompose_features ) { 
-    call CalcPairsPerChrom {
-      input:
-        contigs_fai=contigs_fai,
-        pairs_for_pca=pairs_for_pca,
-        prefix=prefix,
-        athena_docker=athena_docker
-    }
+  # Note: If decompose_features is false, number of pairs will always be 0 for all chromosomes
+  call CalcPairsPerChrom {
+    input:
+      contigs_fai=contigs_fai,
+      compute_pairs=decompose_features,
+      pairs_for_pca=pairs_for_pca,
+      prefix=prefix,
+      athena_docker=athena_docker
   }
 
-  Array[Array[String]] contigs = read_tsv(select_first([CalcPairsPerChrom.updated_fai, contigs_fai]))
+  Array[Array[String]] contigs = read_tsv(CalcPairsPerChrom.pca_pairs)
 
   # Process each chromosome in parallel
   scatter ( contig in contigs ) {
@@ -186,7 +185,7 @@ workflow BinAndAnnotateGenome {
         max_pcs=max_pcs,
         transformations_tsv=feature_transformations_tsv,
         prefix=prefix,
-        athena_docker=athena_docker_dev,
+        athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_learn_pca
     }
 
@@ -211,7 +210,7 @@ workflow BinAndAnnotateGenome {
           contig=contig,
           shard_size=pairs_per_shard_apply_pca,
           prefix="~{prefix}.pairs",
-          athena_docker=athena_docker_dev,
+          athena_docker=athena_docker,
           runtime_attr_chrom_shard=runtime_attr_chrom_shard,
           runtime_attr_apply_pca=runtime_attr_apply_pca,
           runtime_attr_merge_pairs=runtime_attr_merge_pairs
@@ -224,11 +223,14 @@ workflow BinAndAnnotateGenome {
     Array[File] annotated_pairs = MakeAndAnnotatePairs.annotated_pairs
     Array[File] annotated_pairs_idx = MakeAndAnnotatePairs.annotated_pairs_idx
 
+    File pca_pairs = CalcPairsPerChrom.pca_pairs
+
     Array[File]? decomped_pairs = DecompAnnosPerChrom.decomped_bed
     Array[File]? decomped_pairs_idx = DecompAnnosPerChrom.decomped_bed_idx
 
     File? feature_distribs_pre_pca = VisualizeFeatures.feature_hists
 
+    File? pca_model = LearnPCA.pca_model
     File? eigenfeature_stats = LearnPCA.pc_stats
 
   }
@@ -298,7 +300,8 @@ task MakeBins {
 task CalcPairsPerChrom {
   input {
     File contigs_fai
-    Int pairs_for_pca = 100000
+    Boolean compute_pairs
+    Int? pairs_for_pca = 100000
     String prefix
 
     String athena_docker
@@ -315,20 +318,24 @@ task CalcPairsPerChrom {
   }
 
   command <<<
-    set -eu -o pipefail
-
-    total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ printf "%.0f", sum }' ~{contigs_fai} )
-    bp_per_pair=$(( ( $total_bp + ~{pairs_for_pca} - 1 ) / ~{pairs_for_pca} ))
-
-    # Produces a revised .fai file with chromosome, length, and number of pairs to sample
-    awk -v bp_per_pair="$bp_per_pair" -v FS="\t" \
-      '{ printf "%s\t%s\t%0.0f\n", $1, $2, ($2 + bp_per_pair - 1) / bp_per_pair }' \
-      ~{contigs_fai} \
-    > ~{prefix}.updated.fai
+    set -euo pipefail
+    
+    # Produces a TSV file with chromosome, length, and number of pairs to sample
+    if [ "~{compute_pairs}" == "true" ] && [ "~{defined(pairs_for_pca)}" == "true" ]; then
+      total_bp=$( awk -v FS="\t" '{ sum+=$2 }END{ printf "%.0f", sum }' ~{contigs_fai} )
+      bp_per_pair=$(( ( $total_bp + ~{pairs_for_pca} - 1 ) / ~{pairs_for_pca} ))
+      
+      awk -v bp_per_pair="$bp_per_pair" -v FS="\t" \
+        '{ printf "%s\t%s\t%0.0f\n", $1, $2, ($2 + bp_per_pair - 1) / bp_per_pair }' \
+        ~{contigs_fai} \
+      > ~{prefix}.pca_pairs.tsv
+    else
+      awk -v FS="\t" -v OFS="\t" '{ print $1, $2, 0 }' ~{contigs_fai} > ~{prefix}.pca_pairs.tsv
+    fi
   >>>
 
   output {
-    File updated_fai = "~{prefix}.updated.fai"
+    File pca_pairs = "~{prefix}.pca_pairs.tsv"
   }
 }
 
