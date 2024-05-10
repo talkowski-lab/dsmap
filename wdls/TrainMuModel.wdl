@@ -148,7 +148,11 @@ workflow TrainMuModel {
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
-        files_to_tar=flatten([GetPairDiagnostics.all_outputs, 
+        files_to_tar=flatten([[GetPairDiagnostics.pairs_bed,
+                              GetPairDiagnostics.pairs_bed_idx,
+                              GetPairDiagnostics.training_bed,
+                              GetPairDiagnostics.training_bed_idx],
+                              GetPairDiagnostics.all_outputs, 
                               PlotTrainingDiagnostics.all_outputs,
                               [TrainModel.stats_tsv, TrainModel.calibration_tsv]]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.diagnostics",
@@ -255,27 +259,31 @@ task GetPairDiagnostics {
     set -euo pipefail
 
     # Merge bin-pairs and keep first four columns only
-    zcat ~{all_pairs[0]} | sed -n '1p' | cut -f1-4 > pairs.bed
-    zcat ~{sep=" " all_pairs} | grep -ve '^#' | cut -f1-4 >> pairs.bed
-    bgzip -f pairs.bed
-    tabix -f pairs.bed.gz
+    zcat ~{all_pairs[0]} | sed -n '1p' | cut -f1-4 > ~{prefix}.pairs.bed
+    zcat ~{sep=" " all_pairs} | grep -ve '^#' | cut -f1-4 >> ~{prefix}.pairs.bed
+    bgzip -f ~{prefix}.pairs.bed
+    tabix -f ~{prefix}.pairs.bed.gz
 
     # Merge training bin-pairs and keep first four columns only
-    zcat ~{training_pairs[0]} | sed -n '1p' | cut -f1-4 > training.bed
-    zcat ~{sep=" " training_pairs} | grep -ve '^#' | cut -f1-4 >> training.bed
-    bgzip -f training.bed
-    tabix -f training.bed.gz
+    zcat ~{training_pairs[0]} | sed -n '1p' | cut -f1-4 > ~{prefix}.training.bed
+    zcat ~{sep=" " training_pairs} | grep -ve '^#' | cut -f1-4 >> ~{prefix}.training.bed
+    bgzip -f ~{prefix}.training.bed
+    tabix -f ~{prefix}.training.bed.gz
 
     # Get diagnostics
     mkdir outputs/
     /opt/dsmap/scripts/mu/get_pair_diagnostics.R \
       --cnv ~{cnv} \
-      pairs.bed.gz \
-      training.bed.gz \
+      ~{prefix}.pairs.bed.gz \
+      ~{prefix}.training.bed.gz \
       outputs/~{prefix}
   }
 
   output {
+    File pairs_bed = "~{prefix}.pairs.bed.gz"
+    File pairs_bed_idx = "~{prefix}.pairs.bed.gz.tbi"
+    File training_bed = "~{prefix}.training.bed.gz"
+    File training_bed_idx = "~{prefix}.training.bed.gz.tbi"
     Array[File] all_outputs = glob("outputs/~{prefix}*")
   }
   
