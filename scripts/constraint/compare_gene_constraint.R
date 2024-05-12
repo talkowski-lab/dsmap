@@ -42,7 +42,6 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bin
     print("Loading CG DUPs...")
     dup.cg <- read.table(dup.cg.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(dup.cg)[1] <- "gene"
-    n.samples <- 63046
     print("Loading constraint scores...")
     constraint.scores <- read.table(constraint.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(constraint.scores)[1] <- "gene"
@@ -50,21 +49,30 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bin
     print(constraint.metric)
 
     print("Merging DEL, DUP, CG DUP data and constraint scores...")
-    # Merge data by gene
-    gene.scores <- merge(del, dup, dup.cg,
-        by = "gene", all = FALSE,
-        suffixes = c(".DEL", ".DUP", ".DUP.CG"), sort = FALSE
+    # Add colname suffixes for each CNV type and merge
+    colnames(del) <- ifelse(
+        colnames(del) == "gene", colnames(del), paste(colnames(del), "DEL", sep = ".")
+    )
+    colnames(dup) <- ifelse(
+        colnames(dup) == "gene", colnames(dup), paste(colnames(dup), "DUP", sep = ".")
+    )
+    colnames(dup.cg) <- ifelse(
+        colnames(dup.cg) == "gene", colnames(dup.cg), paste(colnames(dup.cg), "DUP.CG", sep = ".")
+    )
+    gene.scores <- Reduce(
+        function(x, y) merge(x, y, by = "gene", all = FALSE, sort = FALSE),
+        list(del, dup, dup.cg)
     )
     gene.scores <- merge(gene.scores, constraint.scores, by = "gene", all = FALSE, sort = FALSE)
     print(
         paste(
-            "Number of genes lost in merge of DSMap data and constraint scores:",
+            "Number of DSMap genes lost in merge with constraint scores:",
             nrow(del) - nrow(gene.scores)
         )
     )
     print(
         paste(
-            "Number of genes with NA constraint score:", sum(is.na(gene.scores[, constraint.metric]))
+            "Number of genes after merge with NA in constraint score:", sum(is.na(gene.scores[, constraint.metric]))
         )
     )
     gene.scores <- gene.scores[!is.na(gene.scores[, constraint.metric]), ]
@@ -77,6 +85,7 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bin
 
     print("Computing DEL, DUP, CG DUP exp and O/E...")
     # Compute expected # of gene dels & dups given sample size
+    n.samples <- 63046
     gene.scores$exp.DEL <- (10^gene.scores$mu.DEL) * 2 * n.samples
     gene.scores$exp.DUP <- (10^gene.scores$mu.DUP) * 2 * n.samples
     gene.scores$exp.DUP.CG <- (10^gene.scores$mu.DUP.CG) * 2 * n.samples
@@ -125,7 +134,7 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
             )
         }))
     })))
-    colnames(oe.stats) <- c("bin", do.call("c", lapply(c("DEL", "DUP"), function(cnv) {
+    colnames(oe.stats) <- c("bin", do.call("c", lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
         paste(c(
             "median", "median.lower", "median.upper",
             "sum", "sum.lower", "sum.upper", "mad"
@@ -174,7 +183,10 @@ compute.z.by.bin <- function(gene.scores, bin.stats) {
             scores[, paste("bin.mad", cnv, sep = ".")]
         return(scores)
     })
-    return(merge(zs.by.cnv[[1]], zs.by.cnv[[2]], by = "gene"))
+    return(Reduce(
+        function(x, y) merge(x, y, by = c("gene", "bin"), all = FALSE, sort = FALSE),
+        zs.by.cnv
+    ))
 }
 
 
@@ -192,9 +204,10 @@ plot.constraint.bin.oe <- function(dat, cors, constraint.label) {
         for (cnv in c("DEL", "DUP", "DUP.CG")) {
             plot(
                 dat[, paste(sumstat, cnv, sep = ".")],
-                pch = pch_type[[sumstat]], col = get(paste(cnv, "colors", sep = "."))$main,
+                pch = pch_type[[sumstat]],
+                col = get(paste(ifelse(cnv == "DUP.CG", "DUP", cnv), "colors", sep = "."))$main,
                 xaxt = "n", xlab = "", ylab = "", las = 2,
-                main = paste(cnv, " Obs/Exp ", "(", sumstat_title, ")"),
+                main = paste(cnv, " Obs/Exp ", "(", sumstat_title[[sumstat]], ")", sep = ""),
                 panel.first = c(abline(h = 1, lty = 5))
             )
             polygon(
@@ -203,7 +216,10 @@ plot.constraint.bin.oe <- function(dat, cors, constraint.label) {
                     dat[, paste(sumstat, "upper", cnv, sep = ".")],
                     rev(dat[, paste(sumstat, "lower", cnv, sep = ".")])
                 ),
-                col = adjustcolor(get(paste(cnv, "colors", sep = "."))$main, alpha.f = 0.3),
+                col = adjustcolor(
+                    get(paste(ifelse(cnv == "DUP.CG", "DUP", cnv), "colors", sep = "."))$main,
+                    alpha.f = 0.3
+                ),
                 border = NA
             )
             title(
@@ -304,6 +320,7 @@ dev.off()
 print("Computing robust Z-scores...")
 # Compute robust Z-scores for O/Es of genes within constraint score bins
 zs <- compute.z.by.bin(gene.scores, oe.stats)
+print(head(zs))
 
 print("Writing out tables...")
 # Output genes ranked by robust Z-score for each CNV type
