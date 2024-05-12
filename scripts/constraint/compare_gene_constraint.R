@@ -29,9 +29,9 @@ dsmapR::load.constants(c("colors"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.bins = 100) {
+load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bins = 100) {
     # Load data files:
-    # gene del & dup observed & expected counts
+    # gene coding DEL, coding DUP, and copy-gain DUP observed and expected counts
     # gene constraint scores
     print("Loading DELs...")
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
@@ -39,6 +39,9 @@ load.gene.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.bins = 100) {
     print("Loading DUPs...")
     dup <- read.table(dup.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(dup)[1] <- "gene"
+    print("Loading CG DUPs...")
+    dup.cg <- read.table(dup.cg.tsv, header = TRUE, sep = "\t", comment.char = "")
+    colnames(dup.cg)[1] <- "gene"
     n.samples <- 63046
     print("Loading constraint scores...")
     constraint.scores <- read.table(constraint.tsv, header = TRUE, sep = "\t", comment.char = "")
@@ -46,9 +49,12 @@ load.gene.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.bins = 100) {
     constraint.metric <- colnames(constraint.scores)[2]
     print(constraint.metric)
 
-    print("Merging DEL/DUP data and constraint scores...")
+    print("Merging DEL, DUP, CG DUP data and constraint scores...")
     # Merge data by gene
-    gene.scores <- merge(del, dup, by = "gene", all = FALSE, suffixes = c(".DEL", ".DUP"), sort = FALSE)
+    gene.scores <- merge(del, dup, dup.cg,
+        by = "gene", all = FALSE,
+        suffixes = c(".DEL", ".DUP", ".DUP.CG"), sort = FALSE
+    )
     gene.scores <- merge(gene.scores, constraint.scores, by = "gene", all = FALSE, sort = FALSE)
     print(
         paste(
@@ -69,14 +75,16 @@ load.gene.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.bins = 100) {
         rank(gene.scores[, constraint.metric], na.last = "keep", ties.method = "random") /
         nrow(gene.scores))
 
-    print("Computing DEL/DUP exp and O/E...")
+    print("Computing DEL, DUP, CG DUP exp and O/E...")
     # Compute expected # of gene dels & dups given sample size
     gene.scores$exp.DEL <- (10^gene.scores$mu.DEL) * 2 * n.samples
     gene.scores$exp.DUP <- (10^gene.scores$mu.DUP) * 2 * n.samples
+    gene.scores$exp.DUP.CG <- (10^gene.scores$mu.DUP.CG) * 2 * n.samples
 
     # Compute gene O/E
     gene.scores$oe.DEL <- gene.scores$n_svs.DEL / gene.scores$exp.DEL
     gene.scores$oe.DUP <- gene.scores$n_svs.DUP / gene.scores$exp.DUP
+    gene.scores$oe.DUP.CG <- gene.scores$n_svs.DUP.CG / gene.scores$exp.DUP.CG
     return(list(gene.scores, constraint.metric))
 }
 
@@ -90,7 +98,7 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
         bootstrap.idxs <- replicate(n.bootstraps, sample(idxs, length(idxs), replace = TRUE))
 
         # Compute obs and exp values with bootstrap for DEL and DUP
-        do.call("cbind", lapply(c("DEL", "DUP"), function(cnv) {
+        do.call("cbind", lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
             # Get obs and exp for genes in bin and bootstrap samples
             obs <- gene.scores[idxs, paste("n_svs", cnv, sep = ".")]
             exp <- gene.scores[idxs, paste("exp", cnv, sep = ".")]
@@ -141,7 +149,7 @@ compute.cor <- function(oe.stats) {
 
 # Compute robust Z-scores of O/Es for genes within each constraint score bin
 compute.z.by.bin <- function(gene.scores, bin.stats) {
-    zs.by.cnv <- lapply(c("DEL", "DUP"), function(cnv) {
+    zs.by.cnv <- lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
         # Annotate genes with bin-level median and MAD O/E
         scores <- merge(
             gene.scores[, c(
@@ -175,86 +183,43 @@ compute.z.by.bin <- function(gene.scores, bin.stats) {
 ######################
 # Plot O/Es of genes by their constraint score bin
 plot.constraint.bin.oe <- function(dat, cors, constraint.label) {
-    par(mfrow = c(2, 2), mar = c(2, 3.5, 2, 1.5))
-    plot(
-        dat$sum.DEL,
-        pch = 19, col = DEL.colors$main,
-        xaxt = "n", xlab = "", ylab = "", las = 2, main = "DEL Obs/Exp (Bin-wide Mean)",
-        panel.first = c(abline(h = 1, lty = 5))
-    )
-    polygon(
-        x = c(1:nrow(dat), rev(1:nrow(dat))),
-        y = c(dat$sum.upper.DEL, rev(dat$sum.lower.DEL)),
-        col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
-    )
-    title(
-        main = paste(
-            "Spearman rho =", round(cors[cors$sum.type == "sum.DEL", "estimate"], 3),
-            "; p =", formatC(cors[cors$sum.type == "sum.DEL", "p"], format = "e", digits = 1)
-        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
-    )
-    mtext(1, text = paste("Genes Binned by", constraint.label, "quantile"))
-    mtext(2, line = 2.5, text = "Observed / Expected")
+    par(mfrow = c(2, 3), mar = c(2, 3.5, 2, 1.5))
 
-    plot(
-        dat$sum.DUP,
-        pch = 19, col = DUP.colors$main,
-        xaxt = "n", xlab = "", ylab = "", las = 2, main = "DUP Obs/Exp (Bin-wide Mean)",
-        panel.first = c(abline(h = 1, lty = 5))
-    )
-    polygon(
-        x = c(1:nrow(dat), rev(1:nrow(dat))),
-        y = c(dat$sum.upper.DUP, rev(dat$sum.lower.DUP)),
-        col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
-    )
-    title(
-        main = paste(
-            "Spearman rho =", round(cors[cors$sum.type == "sum.DUP", "estimate"], 3),
-            "; p =", formatC(cors[cors$sum.type == "sum.DUP", "p"], format = "e", digits = 1)
-        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
-    )
-    mtext(1, text = paste("Genes Binned by", constraint.label, "quantile"))
-    mtext(2, line = 2.5, text = "Observed / Expected")
+    pch_type <- list("sum" = 19, "median" = 21)
+    sumstat_title <- list("sum" = "Bin-wide Mean", "median" = "Median Gene")
 
-    plot(
-        dat$median.DEL,
-        pch = 21, col = DEL.colors$main,
-        xaxt = "n", xlab = "", ylab = "", las = 2, main = "DEL Obs/Exp (Median Gene)",
-        panel.first = c(abline(h = 1, lty = 5))
-    )
-    polygon(
-        x = c(1:nrow(dat), rev(1:nrow(dat))),
-        y = c(dat$median.upper.DEL, rev(dat$median.lower.DEL)),
-        col = adjustcolor(DEL.colors$main, alpha.f = 0.3), border = NA
-    )
-    title(
-        main = paste(
-            "Spearman rho =", round(cors[cors$sum.type == "median.DEL", "estimate"], 3),
-            "; p =", formatC(cors[cors$sum.type == "median.DEL", "p"], format = "e", digits = 1)
-        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
-    )
-    mtext(1, text = paste("Genes Binned by", constraint.label, "quantile"))
-    mtext(2, line = 2.5, text = "Observed / Expected")
-
-    plot(
-        dat$median.DUP,
-        pch = 21, col = DUP.colors$main,
-        xaxt = "n", xlab = "", ylab = "", las = 2, main = "DUP Obs/Exp (Median Gene)",
-        panel.first = c(abline(h = 1, lty = 5))
-    )
-    polygon(
-        x = c(1:nrow(dat), rev(1:nrow(dat))),
-        y = c(dat$median.upper.DUP, rev(dat$median.lower.DUP)),
-        col = adjustcolor(DUP.colors$main, alpha.f = 0.3), border = NA
-    )
-    title(
-        main = paste(
-            "Spearman rho =", round(cors[cors$sum.type == "median.DUP", "estimate"], 3),
-            "; p =", formatC(cors[cors$sum.type == "median.DUP", "p"], format = "e", digits = 1)
-        ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
-    )
-    mtext(1, text = paste("Genes Binned by", constraint.label, "quantile"))
-    mtext(2, line = 2.5, text = "Observed / Expected")
+    for (sumstat in c("sum", "median")) {
+        for (cnv in c("DEL", "DUP", "DUP.CG")) {
+            plot(
+                dat[, paste(sumstat, cnv, sep = ".")],
+                pch = pch_type[[sumstat]], col = get(paste(cnv, "colors", sep = "."))$main,
+                xaxt = "n", xlab = "", ylab = "", las = 2,
+                main = paste(cnv, " Obs/Exp ", "(", sumstat_title, ")"),
+                panel.first = c(abline(h = 1, lty = 5))
+            )
+            polygon(
+                x = c(1:nrow(dat), rev(1:nrow(dat))),
+                y = c(
+                    dat[, paste(sumstat, "upper", cnv, sep = ".")],
+                    rev(dat[, paste(sumstat, "lower", cnv, sep = ".")])
+                ),
+                col = adjustcolor(get(paste(cnv, "colors", sep = "."))$main, alpha.f = 0.3),
+                border = NA
+            )
+            title(
+                main = paste(
+                    "Spearman rho =",
+                    round(cors[cors$sum.type == paste(sumstat, cnv, sep = "."), "estimate"], 3),
+                    "; p =",
+                    formatC(cors[cors$sum.type == paste(sumstat, cnv, sep = "."), "p"],
+                        format = "e", digits = 1
+                    )
+                ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
+            )
+            mtext(1, text = paste("Genes Binned by", constraint.label, "quantile"))
+            mtext(2, line = 2.5, text = "Observed / Expected")
+        }
+    }
 }
 
 
@@ -274,7 +239,10 @@ option_list <- list(
 )
 
 # Get command-line arguments & options
-arg_list <- c("del.tsv", "dup.tsv", "constraint.tsv", "out.pdf", "out_genes_del.tsv", "out_genes_dup.tsv")
+arg_list <- c(
+    "del.tsv", "dup.tsv", "cg_dup.tsv", "constraint.tsv", "out.pdf",
+    "out_genes_del.tsv", "out_genes_dup.tsv", "out_genes_cg_dup.tsv"
+)
 args <- parse_args(
     OptionParser(
         usage = paste("%prog", paste0(arg_list, collapse = " ")),
@@ -297,17 +265,19 @@ if (length(args$args) != length(arg_list)) {
 # Writes args & opts to vars
 del.tsv <- args$args[1]
 dup.tsv <- args$args[2]
-constraint.tsv <- args$args[3]
-out.pdf <- args$args[4]
-out.genes.del.tsv <- args$args[5]
-out.genes.dup.tsv <- args$args[6]
+dup.cg.tsv <- args$args[3]
+constraint.tsv <- args$args[4]
+out.pdf <- args$args[5]
+out.genes.del.tsv <- args$args[6]
+out.genes.dup.tsv <- args$args[7]
+out.genes.dup.cg.tsv <- args$args[8]
 n.bins <- opts$`n-bins`
 constraint.label <- opts$`constraint-label`
 print(constraint.label)
 
 print("Loading scores...")
 # Load gene obs, mus, exps, and constraint scores
-gene.scores <- load.gene.scores(del.tsv, dup.tsv, constraint.tsv, n.bins)
+gene.scores <- load.gene.scores(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bins)
 constraint.metric <- gene.scores[[2]]
 print(constraint.metric)
 gene.scores <- gene.scores[[1]]
@@ -336,11 +306,11 @@ print("Computing robust Z-scores...")
 zs <- compute.z.by.bin(gene.scores, oe.stats)
 
 print("Writing out tables...")
-# Output genes ranked by robust Z-score
+# Output genes ranked by robust Z-score for each CNV type
 write.table(
     zs[
         order(abs(zs$bin.z.DEL), decreasing = TRUE),
-        c("gene", colnames(zs)[grepl("DEL", colnames(zs))])
+        c("gene", colnames(zs)[grepl("DEL$", colnames(zs))])
     ],
     out.genes.del.tsv,
     row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
@@ -348,9 +318,17 @@ write.table(
 write.table(
     zs[
         order(abs(zs$bin.z.DUP), decreasing = TRUE),
-        c("gene", colnames(zs)[grepl("DUP", colnames(zs))])
+        c("gene", colnames(zs)[grepl("DUP$", colnames(zs))])
     ],
     out.genes.dup.tsv,
+    row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
+)
+write.table(
+    zs[
+        order(abs(zs$bin.z.DUP.CG), decreasing = TRUE),
+        c("gene", colnames(zs)[grepl("DUP.CG$", colnames(zs))])
+    ],
+    out.genes.dup.cg.tsv,
     row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE
 )
 # print(paste0(
