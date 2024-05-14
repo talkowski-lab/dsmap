@@ -80,20 +80,7 @@ workflow CalcGenicDosageSensitivity {
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 2b. Count CDS-overlapping deletions per gene
-    call CountCnvs as CountCodingDel {
-      input:
-        vcf=del_vcf,
-        vcf_idx=del_vcf_idx,
-        gtf=FilterGtf.coding_gtf,
-        gtf_idx=FilterGtf.coding_gtf_idx,
-        athena_countsv_options=[""],
-        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DEL.CDS.counts",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_count_cnvs
-    }
-
-    # Step 3a. Compute mutation rates for all CDS-overlapping duplications per gene
+    # Step 2b. Compute mutation rates for all CDS-overlapping duplications per gene
     call QueryMuForGtf as QueryMuCodingDup {
       input:
         gtf=FilterGtf.coding_gtf,
@@ -104,6 +91,32 @@ workflow CalcGenicDosageSensitivity {
         prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DUP.CDS",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
+    }
+
+    # Step 2c. Compute mutation rates for all copy-gain duplications per gene
+    call QueryMuForGtf as QueryMuCopyGainDup {
+      input:
+        gtf=FilterGtf.genes_gtf,
+        gtf_idx=FilterGtf.genes_gtf_idx,
+        mu_bed=dup_mu_bed,
+        mu_bed_idx=dup_mu_bed_idx,
+        athena_query_options=["--fraction 1.0"],
+        prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP.CG",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_query_mu
+    }
+
+    # Step 3a. Count CDS-overlapping deletions per gene
+    call CountCnvs as CountCodingDel {
+      input:
+        vcf=del_vcf,
+        vcf_idx=del_vcf_idx,
+        gtf=FilterGtf.coding_gtf,
+        gtf_idx=FilterGtf.coding_gtf_idx,
+        athena_countsv_options=[""],
+        prefix=basename(FilterGtf.coding_gtf, ".gtf.gz") + ".DEL.CDS.counts",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_count_cnvs
     }
 
     # Step 3b. Count CDS-overlapping duplications per gene
@@ -119,20 +132,7 @@ workflow CalcGenicDosageSensitivity {
         runtime_attr_override=runtime_attr_count_cnvs
     }
 
-    # Step 4a. Compute mutation rates for all copy-gain duplications per gene
-    call QueryMuForGtf as QueryMuCopyGainDup {
-      input:
-        gtf=FilterGtf.genes_gtf,
-        gtf_idx=FilterGtf.genes_gtf_idx,
-        mu_bed=dup_mu_bed,
-        mu_bed_idx=dup_mu_bed_idx,
-        athena_query_options=["--fraction 1.0"],
-        prefix=basename(FilterGtf.genes_gtf, ".gtf.gz") + ".DUP.CG",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_query_mu
-    }
-
-    # Step 4b. Count copy-gain duplications per gene
+    # Step 3c. Count copy-gain duplications per gene
     call CountCnvs as CountCopyGainDup {
       input:
         vcf=dup_vcf,
@@ -146,7 +146,7 @@ workflow CalcGenicDosageSensitivity {
     }
   }
 
-  # Step 2c. Merge and analyze outputs from 2a & 2b
+  # Step 4a. Merge and analyze outputs from 2a & 3a
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeCodingDelData {
     input:
@@ -157,7 +157,7 @@ workflow CalcGenicDosageSensitivity {
       runtime_attr_override=runtime_attr_merge_data
   }
   
-  # Step 3c. Merge and analyze outputs from 3a & 3b
+  # Step 4b. Merge and analyze outputs from 2b & 3b
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeCodingDupData {
     input:
@@ -168,7 +168,7 @@ workflow CalcGenicDosageSensitivity {
       runtime_attr_override=runtime_attr_merge_data
   }
 
-  # Step 4c. Merge and analyze outputs from 4a & 4b
+  # Step 4c. Merge and analyze outputs from 2c & 3c
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeCopyGainDupData {
     input:
