@@ -204,7 +204,7 @@ if (length(args$args) != 3) {
 }
 
 # Writes args & opts to vars
-pairs.in <- list("all" = args$args[2], "training" = args$args[2]) # TODO: Switch back to args[1]
+pairs.in <- list("all" = args$args[1], "training" = args$args[2])
 out.prefix <- args$args[3]
 cnv <- opts$cnv
 
