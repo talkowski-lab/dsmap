@@ -17,6 +17,7 @@
 # Load necessary libraries
 require(dsmapR, quietly = TRUE)
 require(optparse, quietly = TRUE)
+require(stringr, quietly = TRUE)
 
 # Set global options and constants
 options(stringsAsFactors = FALSE, scipen = 1000)
@@ -42,6 +43,7 @@ summarize.pairs <- function(pairs) {
   })))
   rownames(df.by.contig) <- contigs
   colnames(df.by.contig) <- c("no_sv", "has_sv")
+  df.by.contig$pct_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
 
   # Compute dataframe of counts by bin size
   size.range <- seq(0, max(sizes), by = binsize)
@@ -53,11 +55,9 @@ summarize.pairs <- function(pairs) {
   })))
   rownames(df.by.size) <- size.range / 1000
   colnames(df.by.size) <- c("no_sv", "has_sv")
+  df.by.size$pct_has_sv <- df.by.size$has_sv / (df.by.size$has_sv + df.by.size$no_sv)
 
-  return(list(
-    "df.by.contig" = df.by.contig,
-    "df.by.size" = df.by.size
-  ))
+  return(list("contig" = df.by.contig, "size" = df.by.size))
 }
 
 
@@ -73,7 +73,6 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   n.bars <- nrow(df)
   legend.labs <- c()
   if (pct) {
-    df$pct_has_sv <- df$has_sv / (df$has_sv + df$no_sv)
     if (cnv %in% c("DEL", "DUP", "CNV")) {
       bar.colors <- c(get(paste(cnv, "colors", sep = "."))$main)
     } else {
@@ -156,7 +155,7 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
   if (pct) {
-    y.text <- paste("% Bin-pairs with", cnv)
+    y.text <- paste("Proportion Bin-pairs with", cnv)
   } else {
     y.text <- "Bin-pairs"
     if (!is.null(units)) {
@@ -205,21 +204,19 @@ if (length(args$args) != 3) {
 }
 
 # Writes args & opts to vars
-pairs.in <- args$args[1]
-training.in <- args$args[2]
+pairs.in <- list("all" = args$args[2], "training" = args$args[2]) # TODO: Switch back to args[1]
 out.prefix <- args$args[3]
 cnv <- opts$cnv
 
 # Load pairs
-pairs <- load.bins(pairs.in)
-training <- load.bins(training.in)
+pairs <- lapply(pairs.in, load.bins)
 
 # Summarize counts
-pairs.dat <- summarize.pairs(pairs)
-training.dat <- summarize.pairs(training)
+dat <- lapply(pairs, summarize.pairs)
 
 # Merge counts per contig & write to output file
-df.by.contig <- merge(pairs.dat$df.by.contig, training.dat$df.by.contig,
+df.by.contig <- merge(
+  dat[["all"]][["contig"]], dat[["training"]][["contig"]],
   by = 0, suffixes = c("_all", "_training")
 )
 colnames(df.by.contig)[1] <- "contig"
@@ -228,7 +225,8 @@ write.table(df.by.contig, paste(out.prefix, "pair_counts_per_contig.tsv", sep = 
 )
 
 # Merge counts by size & write to output file
-df.by.size <- merge(pairs.dat$df.by.size, training.dat$df.by.size,
+df.by.size <- merge(
+  dat[["all"]][["size"]], dat[["training"]][["size"]],
   by = 0, suffixes = c("_all", "_training"), sort = F
 )
 colnames(df.by.size)[1] <- "pair_distance_kb"
@@ -237,58 +235,47 @@ write.table(df.by.size, paste(out.prefix, "pair_counts_vs_distance.tsv", sep = "
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
-# Plot counts per contig
-pdf(paste(out.prefix, "pair_counts_per_contig.all.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(pairs.dat$df.by.contig,
-  pct = FALSE, title = "All bin-pairs",
-  x.axis.title = "Chromosome", cnv = cnv,
-  label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
-)
-dev.off()
-pdf(paste(out.prefix, "pair_pcts_per_contig.all.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(pairs.dat$df.by.contig,
-  pct = TRUE, title = "All bin-pairs",
-  x.axis.title = "Chromosome", cnv = cnv,
-  label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
-)
-dev.off()
-pdf(paste(out.prefix, "pair_counts_per_contig.training.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(training.dat$df.by.contig,
-  pct = FALSE, title = "Training bin-pairs",
-  x.axis.title = "Chromosome", cnv = cnv,
-  label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
-)
-dev.off()
-pdf(paste(out.prefix, "pair_pcts_per_contig.training.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(training.dat$df.by.contig,
-  pct = TRUE, title = "Training bin-pairs",
-  x.axis.title = "Chromosome", cnv = cnv,
-  label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
-)
-dev.off()
+# Plot bin-pair counts and percentages with CNVs per contig
+# across all bin-pairs and training bin-pairs
+for (pair_type in c("all", "training")) {
+  for (count_type in c("counts", "pcts")) {
+    pdf(
+      paste(
+        out.prefix, paste("pair", count_type, "per_contig", sep = "_"),
+        pair_type, "pdf",
+        sep = "."
+      ),
+      height = 2.5, width = 4.25
+    )
+    plot.counts(
+      dat[[pair_type]][["contig"]],
+      pct = (count_type == "pcts"),
+      title = str_to_title(paste(pair_type, "bin-pairs")),
+      x.axis.title = "Chromosome", cnv = cnv,
+      label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
+    )
+    dev.off()
+  }
+}
 
-# Plot counts vs pair distance contig
-pdf(paste(out.prefix, "pair_counts_vs.distance.all.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(pairs.dat$df.by.size,
-  title = "All bin-pairs",
-  x.axis.title = "Pair distance (kb)", cnv = cnv
-)
-dev.off()
-pdf(paste(out.prefix, "pair_counts_vs.distance.training.pdf", sep = "."),
-  height = 2.5, width = 4.25
-)
-plot.counts(training.dat$df.by.size,
-  title = "Training bin-pairs",
-  x.axis.title = "Pair distance (kb)", cnv = cnv
-)
-dev.off()
+# Plot bin-pair counts and percentages with CNVs vs pair distance
+# across all bin-pairs and training bin-pairs
+for (pair_type in c("all", "training")) {
+  for (count_type in c("counts", "pcts")) {
+    pdf(
+      paste(
+        out.prefix, paste("pair", count_type, "vs_distance", sep = "_"),
+        pair_type, "pdf",
+        sep = "."
+      ),
+      height = 2.5, width = 4.25
+    )
+    plot.counts(
+      dat[[pair_type]][["size"]],
+      pct = (count_type == "pcts"),
+      title = str_to_title(paste(pair_type, "bin-pairs")),
+      x.axis.title = "Pair distance (kb)", cnv = cnv
+    )
+    dev.off()
+  }
+}
