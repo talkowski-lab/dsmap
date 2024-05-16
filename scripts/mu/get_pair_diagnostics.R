@@ -155,11 +155,15 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
-  y.text <- "Bin-pairs"
-  if (!is.null(units)) {
-    y.text <- paste(y.text, " (", units, ")", sep = "")
+  if (pct) {
+    y.text <- paste("% Bin-pairs with", cnv)
+  } else {
+    y.text <- "Bin-pairs"
+    if (!is.null(units)) {
+      y.text <- paste(y.text, " (", units, ")", sep = "")
+    }
   }
-  mtext(2, line = 1.9, text = ytext)
+  mtext(2, line = 1.9, text = y.text)
 
   # Add title
   mtext(3, font = 2, text = title, xpd = T)
