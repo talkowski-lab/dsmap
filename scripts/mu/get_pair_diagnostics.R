@@ -34,23 +34,23 @@ summarize.pairs <- function(pairs) {
   has_sv <- pairs$feats[, 1] >= 0.5
 
   # Compute dataframe of counts per contig based on SV overlap
-  df.by.contig <- do.call("rbind", lapply(contigs, function(contig) {
+  df.by.contig <- as.data.frame(do.call("rbind", lapply(contigs, function(contig) {
     c(
       length(which(pairs$coords[, 1] == contig & !(has_sv))),
       length(which(pairs$coords[, 1] == contig & has_sv))
     )
-  }))
+  })))
   rownames(df.by.contig) <- contigs
   colnames(df.by.contig) <- c("no_sv", "has_sv")
 
   # Compute dataframe of counts by bin size
   size.range <- seq(0, max(sizes), by = binsize)
-  df.by.size <- do.call("rbind", lapply(size.range, function(size) {
+  df.by.size <- as.data.frame(do.call("rbind", lapply(size.range, function(size) {
     c(
       length(which(sizes == size & !(has_sv))),
       length(which(sizes == size & has_sv))
     )
-  }))
+  })))
   rownames(df.by.size) <- size.range / 1000
   colnames(df.by.size) <- c("no_sv", "has_sv")
 
