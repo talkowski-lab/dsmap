@@ -56,7 +56,7 @@ mu.hist <- function(mu, cnv = NULL, x.axis.title = NULL, y.axis.title = "Loci",
   if (is.null(x.axis.title)) {
     x.axis.title <- paste(cnv, "mutation rate")
   }
-  xlims <- quantile(mu$mu, na.rm = T, probs = c(0.005, 0.995))
+  xlims <- c(min(mu$mu), max(mu$mu))
   h <- hist(mu$mu, plot = F, breaks = 100)
 
   # Prep plot area
@@ -69,10 +69,18 @@ mu.hist <- function(mu, cnv = NULL, x.axis.title = NULL, y.axis.title = "Loci",
   )
 
   # Add X axis
-  x.ax.at <- log10(logscale.major)
-  axis(1, at = c(-10e10, 10e10), col = offblack, tck = 0)
+  if (min(mu$mu) > min(log10(logscale.major))) {
+    x.ax.at <- log10(logscale.major)
+    axis(1, at = c(-10e10, 10e10), col = offblack, tck = 0)
+    axis(1, at = log10(logscale.minor), tck = -0.0125, col = offblack, labels = NA)
+  } else {
+    x.ax.at <- floor(min(mu$mu)):log10(max(logscale.major))
+    x.ax.at.demi <- as.numeric(sapply(10^(x.ax.at), function(e) {
+      log10(c(1, 5) * e)
+    }))
+    axis(1, at = x.ax.at.demi, tck = -0.0125, col = offblack, labels = NA)
+  }
   axis(1, at = x.ax.at, tck = -0.025, col = offblack, labels = NA)
-  axis(1, at = log10(logscale.minor), tck = -0.0125, col = offblack, labels = NA)
   sapply(x.ax.at, function(x) {
     axis(1,
       at = x, tick = F, line = -0.65, labels = bquote(10^.(x)),
