@@ -32,7 +32,7 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
   mu <- read.table(mu.in, header = T, sep = "\t", comment.char = "", check.names = F)
   colnames(mu)[1] <- gsub("#", "", colnames(mu)[1])
 
-  # Assign NA to rows where mu == drop.val
+  # Assign NA to rows where mu == na.val
   # (These are introduced by athena as a placeholder for situations where
   #  mutation rates are missing)
   mu[which(mu$mu == na.val), "mu"] <- NA
