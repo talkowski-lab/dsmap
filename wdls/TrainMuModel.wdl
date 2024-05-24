@@ -145,17 +145,91 @@ workflow TrainMuModel {
         runtime_attr_override=runtime_attr_diagnostics
     }
 
+    Array[Pair[String, File]] contig_mus = zip(contigs, PredictMu.pairs_w_mu)
+
+    # Plot mutation rate distribution in each chromosome
+    scatter ( contig_mu in contig_mus ) {
+      call Utils.PlotMuDist as PlotMuHistChrom{
+        input:
+          mu_tsv=contig_mu.right,
+          cnv=cnv,
+          x_title="~{cnv}s per allele per generation",
+          y_title="Bin pairs",
+          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}",
+          dsmap_r_docker=dsmap_r_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call Utils.PlotMuDist as PlotMuBySizeChrom{
+        input:
+          mu_tsv=contig_mu.right,
+          cnv=cnv,
+          x_title="Pair distance (kb)",
+          y_title="~{cnv}s per allele per generation",
+          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}",
+          distance=true,
+          dsmap_r_docker=dsmap_r_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+    }
+
+    # Merge mu files across chromosomes to plot overall mutation rate distribution
+    call Utils.MergeBEDs as MergeMus{
+      input:
+        beds=PredictMu.pairs_w_mu,
+        prefix="~{prefix}.~{cnv}.mu",
+        beds_are_bgzipped=true,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_merge_beds
+    }
+
+    # Plot overall mutation rate distribution
+    call Utils.PlotMuDist as PlotMuHistAll{
+      input:
+        mu_tsv=MergeMus.merged_bed,
+        cnv=cnv,
+        x_title="~{cnv}s per allele per generation",
+        y_title="Bin pairs",
+        out_prefix="~{prefix}.~{cnv}",
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+    call Utils.PlotMuDist as PlotMuBySizeAll{
+      input:
+        mu_tsv=MergeMus.merged_bed,
+        cnv=cnv,
+        x_title="Pair distance (kb)",
+        y_title="~{cnv}s per allele per generation",
+        out_prefix="~{prefix}.~{cnv}",
+        distance=true,
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+
     # Tar all diagnostics for convenience
-    call Utils.MakeTarball as MergeDiagnostics {
+    call Utils.MakeTarball as MergeTrainInputDiagnostics {
       input:
         files_to_tar=flatten([[GetPairDiagnostics.pairs_bed,
                               GetPairDiagnostics.pairs_bed_idx,
                               GetPairDiagnostics.training_bed,
                               GetPairDiagnostics.training_bed_idx],
-                              GetPairDiagnostics.all_outputs, 
-                              PlotTrainingDiagnostics.all_outputs,
+                              GetPairDiagnostics.all_outputs]),
+        tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.input_diagnostics",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+    call Utils.MakeTarball as MergePerformanceDiagnostics {
+      input:
+        files_to_tar=flatten([PlotTrainingDiagnostics.all_outputs,
                               [TrainModel.stats_tsv, TrainModel.calibration_tsv]]),
-        tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.diagnostics",
+        tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.performance_diagnostics",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+    call Utils.MakeTarball as MergeMuDiagnostics {
+      input:
+        files_to_tar=[PlotMuHistChrom.mu_dist, PlotMuBySizeChrom.mu_dist,
+                      PlotMuHistAll.mu_dist, PlotMuBySizeAll.mu_dist],
+        tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
@@ -164,7 +238,9 @@ workflow TrainMuModel {
   output {
     Array[File] pairs_w_mu = PredictMu.pairs_w_mu
     Array[File] pairs_w_mu_idx = PredictMu.pairs_w_mu_idx
-    File? diagnostics = MergeDiagnostics.tarball
+    File? input_diagnostics = MergeTrainInputDiagnostics.tarball
+    File? performance_diagnostics = MergePerformanceDiagnostics.tarball
+    File? mu_diagnostics = MergeMuDiagnostics.tarball
   }
 }
 

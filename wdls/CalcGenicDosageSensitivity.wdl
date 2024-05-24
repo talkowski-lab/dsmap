@@ -183,7 +183,7 @@ workflow CalcGenicDosageSensitivity {
   if ( run_diagnostics ) {
 
     # Plot mutation rates per gene as a sanity check
-    call Utils.PlotMuHist as PlotCodingDelMu {
+    call Utils.PlotMuDist as PlotCodingDelMu {
       input:
         mu_tsv=MergeCodingDelData.merged_tsv,
         cnv="DEL",
@@ -193,7 +193,7 @@ workflow CalcGenicDosageSensitivity {
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
-    call Utils.PlotMuHist as PlotCodingDupMu {
+    call Utils.PlotMuDist as PlotCodingDupMu {
       input:
         mu_tsv=MergeCodingDupData.merged_tsv,
         cnv="DUP",
@@ -203,7 +203,7 @@ workflow CalcGenicDosageSensitivity {
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
-    call Utils.PlotMuHist as PlotCopyGainDupMu {
+    call Utils.PlotMuDist as PlotCopyGainDupMu {
       input:
         mu_tsv=MergeCopyGainDupData.merged_tsv,
         cnv="DUP",
@@ -217,7 +217,7 @@ workflow CalcGenicDosageSensitivity {
     # Tar diagnostics, for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
-        files_to_tar=[PlotCodingDelMu.mu_hist, PlotCodingDupMu.mu_hist, PlotCopyGainDupMu.mu_hist],
+        files_to_tar=[PlotCodingDelMu.mu_dist, PlotCodingDupMu.mu_dist, PlotCopyGainDupMu.mu_dist],
         tarball_prefix="~{prefix}.CalcGenicDosageSensitivity.diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_merge_diagnostics
