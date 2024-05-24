@@ -155,7 +155,7 @@ workflow TrainMuModel {
           cnv=cnv,
           x_title="~{cnv}s per allele per generation",
           y_title="Bin pairs",
-          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}",
+          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}.hist",
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -165,7 +165,7 @@ workflow TrainMuModel {
           cnv=cnv,
           x_title="Pair distance (kb)",
           y_title="~{cnv}s per allele per generation",
-          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}",
+          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}.size",
           distance=true,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -189,7 +189,7 @@ workflow TrainMuModel {
         cnv=cnv,
         x_title="~{cnv}s per allele per generation",
         y_title="Bin pairs",
-        out_prefix="~{prefix}.~{cnv}",
+        out_prefix="~{prefix}.~{cnv}.hist",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
@@ -199,7 +199,7 @@ workflow TrainMuModel {
         cnv=cnv,
         x_title="Pair distance (kb)",
         y_title="~{cnv}s per allele per generation",
-        out_prefix="~{prefix}.~{cnv}",
+        out_prefix="~{prefix}.~{cnv}.size",
         distance=true,
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics

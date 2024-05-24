@@ -341,7 +341,7 @@ task PlotMuDist {
   >>>
 
   output {
-    File mu_dist = "~{out_prefix}.mutation_rate_~{true='vs_distance' false='hist' distance}.pdf"
+    File mu_dist = "~{out_prefix}.mutation_rate.pdf"
   }
 
   runtime {

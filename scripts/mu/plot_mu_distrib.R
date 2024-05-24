@@ -236,19 +236,15 @@ y.title <- opts$`y-title`
 # Load mutation rates
 mu <- load.mu.tsv(mu.in)
 
+pdf(paste(out.prefix, "mutation_rate.pdf", sep = "."),
+  height = 3, width = 4.5
+)
 if (plot.distance) {
   # Plot mutation rate by bin pair distance
-  pdf(paste(out.prefix, "mutation_rate_vs_distance.pdf", sep = "."),
-    height = 3, width = 4.5
-  )
   mu.distance(mu, cnv, x.title, y.title)
-  dev.off()
 } else {
   # Plot histogram of mutation rates
-  pdf(paste(out.prefix, "mutation_rate_hist.pdf", sep = "."),
-    height = 3, width = 4.5
-  )
   mu.hist(mu, cnv, x.title, y.title)
-  dev.off()
 }
+dev.off()
 
