@@ -155,7 +155,7 @@ workflow TrainMuModel {
           cnv=cnv,
           x_title="~{cnv}s per allele per generation",
           y_title="Bin pairs",
-          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}.hist",
+          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}.hist",
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -165,7 +165,7 @@ workflow TrainMuModel {
           cnv=cnv,
           x_title="Pair distance (kb)",
           y_title="~{cnv}s per allele per generation",
-          out_prefix="~{prefix}.~{contig_mu.left}.~{cnv}.size",
+          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}.size",
           distance=true,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -227,8 +227,8 @@ workflow TrainMuModel {
     }
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
-        files_to_tar=[PlotMuHistChrom.mu_dist, PlotMuBySizeChrom.mu_dist,
-                      PlotMuHistAll.mu_dist, PlotMuBySizeAll.mu_dist],
+        files_to_tar=flatten([PlotMuHistChrom.mu_dist, PlotMuBySizeChrom.mu_dist,
+                              [PlotMuHistAll.mu_dist, PlotMuBySizeAll.mu_dist]]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
