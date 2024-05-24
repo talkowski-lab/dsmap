@@ -37,6 +37,10 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
   #  mutation rates are missing)
   mu[which(mu$mu == na.val), "mu"] <- NA
 
+  # Assign NA to rows where mu is infinite
+  # TODO: Amend these in the model
+  mu[which(is.infinite(mu$mu)), "mu"] <- NA
+
   return(mu)
 }
 
