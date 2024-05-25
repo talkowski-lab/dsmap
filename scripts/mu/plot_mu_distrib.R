@@ -32,14 +32,11 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
   mu <- read.table(mu.in, header = T, sep = "\t", comment.char = "", check.names = F)
   colnames(mu)[1] <- gsub("#", "", colnames(mu)[1])
 
-  # Assign NA to rows where mu == na.val
-  # (These are introduced by athena as a placeholder for situations where
+  # Remove rows where mu == na.val or mu is infinite
+  # (na.val is introduced by athena as a placeholder for situations where
   #  mutation rates are missing)
-  mu[which(mu$mu == na.val), "mu"] <- NA
-
-  # Assign NA to rows where mu is infinite
   # TODO: Amend these in the model
-  mu[which(is.infinite(mu$mu)), "mu"] <- NA
+  mu <- mu[!(mu$mu == na.val) & !(is.infinite(mu$mu)), ]
 
   return(mu)
 }
