@@ -77,8 +77,8 @@ workflow CalcSegmentDosageSensitivity {
     # Step 2a. Compute mutation rates for all deletions overlapping each segment
     call QueryMu as QueryMuDel {
       input:
-        query=query,
-        query_idx=query_idx,
+        query=FilterQuerySingleChrom.query_chrom,
+        query_idx=FilterQuerySingleChrom.query_chrom_idx,
         mu_bed=del_mu_bed,
         mu_bed_idx=del_mu_bed_idx,
         athena_query_options=athena_sv_options,
@@ -90,8 +90,8 @@ workflow CalcSegmentDosageSensitivity {
     # Step 2b. Compute mutation rates for all duplications overlapping each segment
     call QueryMu as QueryMuDup {
       input:
-        query=query,
-        query_idx=query_idx,
+        query=FilterQuerySingleChrom.query_chrom,
+        query_idx=FilterQuerySingleChrom.query_chrom_idx,
         mu_bed=dup_mu_bed,
         mu_bed_idx=dup_mu_bed_idx,
         athena_query_options=athena_sv_options,
