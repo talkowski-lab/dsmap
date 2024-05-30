@@ -56,6 +56,12 @@ workflow CalcSegmentDosageSensitivity {
   }
   Array[String] athena_sv_options = select_all([athena_full_overlap_option])
 
+  # Create file prefixes
+  String del_overlap_prefix = if full_segment_overlap then ".CL" else ""
+  String dup_overlap_prefix = if full_segment_overlap then ".CG" else ""
+  String del_prefix = ".DEL" + del_overlap_prefix
+  String dup_prefix = ".DUP" + dup_overlap_prefix
+
   # Parallelize per chromosome
   scatter ( contig in contigs ) {
 
@@ -82,7 +88,7 @@ workflow CalcSegmentDosageSensitivity {
         mu_bed=del_mu_bed,
         mu_bed_idx=del_mu_bed_idx,
         athena_query_options=athena_sv_options,
-        prefix=basename(query, ".bed.gz") + ".DEL",
+        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
@@ -95,7 +101,7 @@ workflow CalcSegmentDosageSensitivity {
         mu_bed=dup_mu_bed,
         mu_bed_idx=dup_mu_bed_idx,
         athena_query_options=athena_sv_options,
-        prefix=basename(query, ".bed.gz") + ".DUP",
+        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + dup_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
@@ -108,7 +114,7 @@ workflow CalcSegmentDosageSensitivity {
         query=FilterQuerySingleChrom.query_chrom,
         query_idx=FilterQuerySingleChrom.query_chrom_idx,
         athena_countsv_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + ".DEL.counts",
+        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_cnvs
     }
@@ -121,7 +127,7 @@ workflow CalcSegmentDosageSensitivity {
         query=FilterQuerySingleChrom.query_chrom,
         query_idx=FilterQuerySingleChrom.query_chrom_idx,
         athena_countsv_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + ".DUP.counts",
+        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + dup_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_cnvs
     }
@@ -133,7 +139,7 @@ workflow CalcSegmentDosageSensitivity {
     input:
       mu_tsvs=QueryMuDel.mu_tsv,
       counts_tsvs=CountDel.counts_tsv,
-      prefix=prefix + ".DEL",
+      prefix=prefix + del_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
@@ -144,7 +150,7 @@ workflow CalcSegmentDosageSensitivity {
     input:
       mu_tsvs=QueryMuDup.mu_tsv,
       counts_tsvs=CountDup.counts_tsv,
-      prefix=prefix + ".DUP",
+      prefix=prefix + dup_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
@@ -159,7 +165,7 @@ workflow CalcSegmentDosageSensitivity {
         cnv="DEL",
         x_title="Deletions per allele per generation",
         y_title="Segments",
-        out_prefix=prefix + ".DEL",
+        out_prefix=prefix + del_prefix,
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
@@ -169,7 +175,7 @@ workflow CalcSegmentDosageSensitivity {
         cnv="DUP",
         x_title="Duplications per allele per generation",
         y_title="Segments",
-        out_prefix=prefix + ".DUP",
+        out_prefix=prefix + dup_prefix,
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
@@ -321,7 +327,7 @@ task CountCnvs {
     set -euo pipefail
 
     # Count SVs
-    athena_cmd="athena count-sv --query-format bed --outfile ~{prefix}.tsv.gz"
+    athena_cmd="athena count-sv --query-format bed --outfile ~{prefix}.counts.tsv.gz"
     athena_cmd="$athena_cmd --bgzip  ~{sep=' ' athena_countsv_options}"
     athena_cmd="$athena_cmd ~{vcf} ~{query}"
     echo -e "Now counting SVs using command:\n$athena_cmd"
@@ -329,7 +335,7 @@ task CountCnvs {
   >>>
 
   output {
-    File counts_tsv = "~{prefix}.tsv.gz"
+    File counts_tsv = "~{prefix}.counts.tsv.gz"
   }
   
   runtime {
