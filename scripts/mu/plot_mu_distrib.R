@@ -106,11 +106,10 @@ mu.hist <- function(mu, cnv = NULL, x.axis.title = NULL, y.axis.title = "Loci",
   axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
-  y.text <- "Bin-pairs"
   if (!is.null(units)) {
-    y.text <- paste(y.text, " (", units, ")", sep = "")
+    y.axis.title <- paste(y.axis.title, " (", units, ")", sep = "")
   }
-  mtext(2, line = 1.9, text = y.text)
+  mtext(2, line = 1.9, text = y.axis.title)
 
   # Add title
   mtext(3, font = 2, text = title, xpd = T)
