@@ -29,7 +29,7 @@ dsmapR::load.constants(c("colors"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bins = 100) {
+load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles = 100) {
     # Load data files:
     # gene coding DEL, coding DUP, and copy-gain DUP observed and expected counts
     # gene constraint scores
@@ -77,9 +77,9 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bin
     )
     gene.scores <- gene.scores[!is.na(gene.scores[, constraint.metric]), ]
 
-    print("Calculating bin quantiles...")
-    # Calculate bin quantiles of constraint score
-    gene.scores$bin <- ceiling(n.bins *
+    print("Calculating quantiles...")
+    # Calculate quantiles of constraint score
+    gene.scores$quantile <- ceiling(n.quantiles *
         rank(gene.scores[, constraint.metric], na.last = "keep", ties.method = "random") /
         nrow(gene.scores))
 
@@ -97,18 +97,18 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bin
     return(list(gene.scores, constraint.metric))
 }
 
-# Compute gene O/E summary statistics with confidence intervals per constraint score bin
-compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 1000, seed = 42) {
-    oe.stats <- cbind(1:n.bins, do.call("rbind", lapply(1:n.bins, function(i) {
-        # Get genes in bin
-        idxs <- which(gene.scores$bin == i)
-        # Bootstrap sampling of genes in bin
+# Compute gene O/E summary statistics with confidence intervals per constraint score quantile
+compute.oe.stats.by.quantile <- function(gene.scores, n.quantiles = 100, n.bootstraps = 1000, seed = 42) {
+    oe.stats <- cbind(1:n.quantiles, do.call("rbind", lapply(1:n.quantiles, function(i) {
+        # Get genes in quantile
+        idxs <- which(gene.scores$quantile == i)
+        # Bootstrap sampling of genes in quantile
         set.seed(seed)
         bootstrap.idxs <- replicate(n.bootstraps, sample(idxs, length(idxs), replace = TRUE))
 
         # Compute obs and exp values with bootstrap for DEL and DUP
         do.call("cbind", lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
-            # Get obs and exp for genes in bin and bootstrap samples
+            # Get obs and exp for genes in quantile and bootstrap samples
             obs <- gene.scores[idxs, paste("n_svs", cnv, sep = ".")]
             exp <- gene.scores[idxs, paste("exp", cnv, sep = ".")]
             bootstrap.obs <- matrix(
@@ -120,13 +120,13 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
                 ncol = n.bootstraps
             )
 
-            # Compute bootstrap confidence intervals on bin summary statistics
+            # Compute bootstrap confidence intervals on quantile summary statistics
             bootstrap.medians <- colMedians(bootstrap.obs / bootstrap.exp)
             median.ci <- quantile(bootstrap.medians, c(0.05, 0.95))
             bootstrap.sums <- colSums(bootstrap.obs) / colSums(bootstrap.exp)
             sums.ci <- quantile(bootstrap.sums, c(0.05, 0.95))
 
-            # Return bin sum stat point estimates and CIs
+            # Return quantile sum stat point estimates and CIs
             data.frame(
                 median(obs / exp), median.ci[1], median.ci[2],
                 sum(obs) / sum(exp), sums.ci[1], sums.ci[2],
@@ -134,7 +134,7 @@ compute.oe.stats.by.bin <- function(gene.scores, n.bins = 100, n.bootstraps = 10
             )
         }))
     })))
-    colnames(oe.stats) <- c("bin", do.call("c", lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
+    colnames(oe.stats) <- c("quantile", do.call("c", lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
         paste(c(
             "median", "median.lower", "median.upper",
             "sum", "sum.lower", "sum.upper", "mad"
@@ -156,35 +156,35 @@ compute.cor <- function(oe.stats) {
     return(cors)
 }
 
-# Compute robust Z-scores of O/Es for genes within each constraint score bin
-compute.z.by.bin <- function(gene.scores, bin.stats) {
+# Compute robust Z-scores of O/Es for genes within each constraint score quantile
+compute.z.by.quantile <- function(gene.scores, quantile.stats) {
     zs.by.cnv <- lapply(c("DEL", "DUP", "DUP.CG"), function(cnv) {
-        # Annotate genes with bin-level median and MAD O/E
+        # Annotate genes with quantile-level median and MAD O/E
         scores <- merge(
             gene.scores[, c(
-                "gene", "bin",
+                "gene", "quantile",
                 paste("n_svs", cnv, sep = "."),
                 paste("exp", cnv, sep = "."),
                 paste("oe", cnv, sep = ".")
-            )], bin.stats[, c(
-                "bin",
+            )], quantile.stats[, c(
+                "quantile",
                 paste("median", cnv, sep = "."),
                 paste("mad", cnv, sep = ".")
-            )], "bin"
+            )], "quantile"
         )
         colnames(scores)[(ncol(scores) - 1):ncol(scores)] <- c(
-            paste("bin.median", cnv, sep = "."),
-            paste("bin.mad", cnv, sep = ".")
+            paste("quantile.median", cnv, sep = "."),
+            paste("quantile.mad", cnv, sep = ".")
         )
 
         # Calculate gene robust Z-scores
-        scores[, paste("bin.z", cnv, sep = ".")] <- (scores[, paste("oe", cnv, sep = ".")] -
-            scores[, paste("bin.median", cnv, sep = ".")]) /
-            scores[, paste("bin.mad", cnv, sep = ".")]
+        scores[, paste("quantile.z", cnv, sep = ".")] <- (scores[, paste("oe", cnv, sep = ".")] -
+            scores[, paste("quantile.median", cnv, sep = ".")]) /
+            scores[, paste("quantile.mad", cnv, sep = ".")]
         return(scores)
     })
     return(Reduce(
-        function(x, y) merge(x, y, by = c("gene", "bin"), all = FALSE, sort = FALSE),
+        function(x, y) merge(x, y, by = c("gene", "quantile"), all = FALSE, sort = FALSE),
         zs.by.cnv
     ))
 }
@@ -193,12 +193,12 @@ compute.z.by.bin <- function(gene.scores, bin.stats) {
 ######################
 # Plotting functions #
 ######################
-# Plot O/Es of genes by their constraint score bin
-plot.constraint.bin.oe <- function(dat, cors, constraint.label) {
+# Plot O/Es of genes by their constraint score quantile
+plot.constraint.quantile.oe <- function(dat, cors, constraint.label) {
     par(mfrow = c(2, 3), mar = c(2, 3.5, 2, 1.5))
 
     pch_type <- list("sum" = 19, "median" = 21)
-    sumstat_title <- list("sum" = "Bin-wide Mean", "median" = "Median Gene")
+    sumstat_title <- list("sum" = "Quantile-wide Mean", "median" = "Median Gene")
 
     for (sumstat in c("sum", "median")) {
         for (cnv in c("DEL", "DUP", "DUP.CG")) {
@@ -248,9 +248,9 @@ option_list <- list(
         type = "character",
         help = "Output label for constraint metric if different from input TSV column name"
     ),
-    make_option("--n-bins",
+    make_option("--n-quantiles",
         type = "integer", default = 100,
-        help = "Number of bins to divide genes into [default %default]"
+        help = "Number of quantiles to divide genes into [default %default]"
     )
 )
 
@@ -287,21 +287,21 @@ out.pdf <- args$args[5]
 out.genes.del.tsv <- args$args[6]
 out.genes.dup.tsv <- args$args[7]
 out.genes.dup.cg.tsv <- args$args[8]
-n.bins <- opts$`n-bins`
+n.quantiles <- opts$`n-quantiles`
 constraint.label <- opts$`constraint-label`
 print(constraint.label)
 
 print("Loading scores...")
 # Load gene obs, mus, exps, and constraint scores
-gene.scores <- load.gene.scores(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.bins)
+gene.scores <- load.gene.scores(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles)
 constraint.metric <- gene.scores[[2]]
 print(constraint.metric)
 gene.scores <- gene.scores[[1]]
 print(head(gene.scores))
 
-print("Computing stats by bin...")
-# Compute gene O/E summary statistics per constraint score bin
-oe.stats <- compute.oe.stats.by.bin(gene.scores, n.bins)
+print("Computing stats by quantile...")
+# Compute gene O/E summary statistics per constraint score quantile
+oe.stats <- compute.oe.stats.by.quantile(gene.scores, n.quantiles)
 print(head(oe.stats))
 
 print("Computing correlations...")
@@ -309,24 +309,24 @@ print("Computing correlations...")
 cors <- compute.cor(oe.stats)
 
 print("Plotting...")
-# Plot O/Es of genes by their constraint score bin
+# Plot O/Es of genes by their constraint score quantile
 pdf(out.pdf, height = 5, width = 10)
-plot.constraint.bin.oe(
+plot.constraint.quantile.oe(
     oe.stats, cors,
     ifelse(is.null(constraint.label), constraint.metric, constraint.label)
 )
 dev.off()
 
 print("Computing robust Z-scores...")
-# Compute robust Z-scores for O/Es of genes within constraint score bins
-zs <- compute.z.by.bin(gene.scores, oe.stats)
+# Compute robust Z-scores for O/Es of genes within constraint score quantiles
+zs <- compute.z.by.quantile(gene.scores, oe.stats)
 print(head(zs))
 
 print("Writing out tables...")
 # Output genes ranked by robust Z-score for each CNV type
 write.table(
     zs[
-        order(abs(zs$bin.z.DEL), decreasing = TRUE),
+        order(abs(zs$quantile.z.DEL), decreasing = TRUE),
         c("gene", colnames(zs)[grepl("DEL$", colnames(zs))])
     ],
     out.genes.del.tsv,
@@ -334,7 +334,7 @@ write.table(
 )
 write.table(
     zs[
-        order(abs(zs$bin.z.DUP), decreasing = TRUE),
+        order(abs(zs$quantile.z.DUP), decreasing = TRUE),
         c("gene", colnames(zs)[grepl("DUP$", colnames(zs))])
     ],
     out.genes.dup.tsv,
@@ -342,7 +342,7 @@ write.table(
 )
 write.table(
     zs[
-        order(abs(zs$bin.z.DUP.CG), decreasing = TRUE),
+        order(abs(zs$quantile.z.DUP.CG), decreasing = TRUE),
         c("gene", colnames(zs)[grepl("DUP.CG$", colnames(zs))])
     ],
     out.genes.dup.cg.tsv,
@@ -357,19 +357,19 @@ write.table(
 #     " (", round(sum(zs$exp.DEL == 0) / nrow(zs) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# bins with DEL O/E median of 0: ", sum(oe.stats$median.DEL == 0),
+#     "# quantiles with DEL O/E median of 0: ", sum(oe.stats$median.DEL == 0),
 #     " (", round(sum(oe.stats$median.DEL == 0) / nrow(oe.stats) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# bins with DEL O/E MAD of 0: ", sum(oe.stats$mad.DEL == 0),
+#     "# quantiles with DEL O/E MAD of 0: ", sum(oe.stats$mad.DEL == 0),
 #     " (", round(sum(oe.stats$mad.DEL == 0) / nrow(oe.stats) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# genes with abs(DEL O/E Z) > 3 in bins with median & MAD O/E > 0: ",
-#     sum((abs(zs$bin.z.DEL) > 3) & (zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))),
+#     "# genes with abs(DEL O/E Z) > 3 in quantiles with median & MAD O/E > 0: ",
+#     sum((abs(zs$quantile.z.DEL) > 3) & (zs$quantile.median.DEL > 0) & ((zs$quantile.mad.DEL > 0))),
 #     " (", round(
-#         sum((abs(zs$bin.z.DEL) > 3) & (zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))) /
-#             sum((zs$bin.median.DEL > 0) & ((zs$bin.mad.DEL > 0))) * 100, 1
+#         sum((abs(zs$quantile.z.DEL) > 3) & (zs$quantile.median.DEL > 0) & ((zs$quantile.mad.DEL > 0))) /
+#             sum((zs$quantile.median.DEL > 0) & ((zs$quantile.mad.DEL > 0))) * 100, 1
 #     ), "%)"
 # ))
 # print("###########################")
@@ -382,18 +382,18 @@ write.table(
 #     " (", round(sum(zs$exp.DUP == 0) / nrow(zs) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# bins with DUP O/E median of 0: ", sum(oe.stats$median.DUP == 0),
+#     "# quantiles with DUP O/E median of 0: ", sum(oe.stats$median.DUP == 0),
 #     " (", round(sum(oe.stats$median.DUP == 0) / nrow(oe.stats) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# bins with DUP O/E MAD of 0: ", sum(oe.stats$mad.DUP == 0),
+#     "# quantiles with DUP O/E MAD of 0: ", sum(oe.stats$mad.DUP == 0),
 #     " (", round(sum(oe.stats$mad.DUP == 0) / nrow(oe.stats) * 100, 1), "%)"
 # ))
 # print(paste0(
-#     "# genes with abs(DUP O/E Z) > 3 in bins with median & MAD O/E > 0: ",
-#     sum((abs(zs$bin.z.DUP) > 3) & (zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))),
+#     "# genes with abs(DUP O/E Z) > 3 in quantiles with median & MAD O/E > 0: ",
+#     sum((abs(zs$quantile.z.DUP) > 3) & (zs$quantile.median.DUP > 0) & ((zs$quantile.mad.DUP > 0))),
 #     " (", round(
-#         sum((abs(zs$bin.z.DUP) > 3) & (zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))) /
-#             sum((zs$bin.median.DUP > 0) & ((zs$bin.mad.DUP > 0))) * 100, 1
+#         sum((abs(zs$quantile.z.DUP) > 3) & (zs$quantile.median.DUP > 0) & ((zs$quantile.mad.DUP > 0))) /
+#             sum((zs$quantile.median.DUP > 0) & ((zs$quantile.mad.DUP > 0))) * 100, 1
 #     ), "%)"
 # ))
