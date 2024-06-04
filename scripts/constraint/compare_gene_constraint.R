@@ -152,7 +152,7 @@ compute.cor <- function(oe.stats) {
         )
         data.frame(names(oe.stats)[i], cor.vals$estimate, cor.vals$p.value)
     }))
-    colnames(cors) <- c("sum.type", "estimate", "p")
+    colnames(cors) <- c("sumstat.type", "estimate", "p")
     return(cors)
 }
 
@@ -225,9 +225,9 @@ plot.constraint.quantile.oe <- function(dat, cors, constraint.label) {
             title(
                 main = paste(
                     "Spearman rho =",
-                    round(cors[cors$sum.type == paste(sumstat, cnv, sep = "."), "estimate"], 3),
+                    round(cors[cors$sumstat.type == paste(sumstat, cnv, sep = "."), "estimate"], 3),
                     "; p =",
-                    formatC(cors[cors$sum.type == paste(sumstat, cnv, sep = "."), "p"],
+                    formatC(cors[cors$sumstat.type == paste(sumstat, cnv, sep = "."), "p"],
                         format = "e", digits = 1
                     )
                 ), outer = FALSE, line = -1, cex.main = 1, font.main = 1
