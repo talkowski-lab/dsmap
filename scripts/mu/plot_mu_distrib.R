@@ -8,7 +8,7 @@
 # Distributed under terms of the MIT License (see LICENSE)
 # Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
 
-# Plot distribution of mutation rate estimates
+# Plot histogram of mutation rate predictions over targets
 
 
 #########
@@ -46,16 +46,13 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 # Plotting functions #
 ######################
 # Histogram of mutation rates
-mu.hist <- function(mu, cnv = NULL, x.axis.title = NULL, y.axis.title = "Loci",
-                    title = "Mutation rate") {
+mu.hist <- function(mu, cnv = NULL, x.axis.title = "CNVs per allele per generation",
+                    y.axis.title = "Loci", title = "Mutation rate") {
   # Set plot parameters
   if (cnv %in% c("DEL", "DUP", "CNV")) {
     bar.color <- get(paste(cnv, "colors", sep = "."))$main
   } else {
     bar.color <- browns$main
-  }
-  if (is.null(x.axis.title)) {
-    x.axis.title <- paste(cnv, "mutation rate")
   }
   xlims <- c(floor(min(mu$mu)), ceiling(max(mu$mu)))
   h <- hist(mu$mu, plot = F, breaks = 100)
@@ -115,105 +112,27 @@ mu.hist <- function(mu, cnv = NULL, x.axis.title = NULL, y.axis.title = "Loci",
   mtext(3, font = 2, text = title, xpd = T)
 }
 
-# Mutation rate by bin pair distance
-mu.distance <- function(mu, cnv = NULL, x.axis.title = "Pair distance",
-                        y.axis.title = NULL,
-                        title = "Mutation rate density by pair distance") {
-  # Set plot parameters
-  if (cnv == "DEL") {
-    pal <- "Reds"
-  } else if (cnv == "DUP") {
-    pal <- "Blues"
-  } else {
-    pal <- "Oranges"
-  }
-  if (is.null(y.axis.title)) {
-    y.axis.title <- paste(cnv, "mutation rate")
-  }
-
-  # Compute bin pair sizes
-  binsize <- infer.bin.size(mu)
-  mu$size <- mu$end - mu$start - binsize
-  sizes <- seq(0, max(mu$size), binsize)
-
-  # Prep plot area
-  ylims <- c(floor(min(mu$mu)), ceiling(max(mu$mu)))
-  prep.plot.area(
-    c(min(mu$size) - binsize / 2, max(mu$size) + binsize / 2),
-    ylims,
-    parmar = c(2.5, 2.8, 1.2, 1)
-  )
-
-  # For each bin pair size, compute density distribution of mu in log space
-  # Create matrix where rows are bin pair sizes,
-  # columns are densities in mu bins (transposed when plotted with image)
-  ybreaks.by <- 0.5
-  ybreaks <- seq(ylims[1], ylims[2], ybreaks.by)
-  mu.size.density <- do.call("rbind", lapply(sizes, function(s) {
-    hist(mu[mu$size == s, "mu"], ybreaks, plot = F)$density
-  }))
-  # Plot at midpoints of histogram bars
-  image(
-    sizes, ybreaks[-length(ybreaks)] + ybreaks.by / 2,
-    mu.size.density,
-    add = TRUE,
-    col = hcl.colors(palette = pal, rev = TRUE, n = 50)
-  )
-
-  # Add X axis
-  x.ticks <- axTicks(1)
-  axis(1, at = c(-10e10, 10e10), col = offblack, tck = 0)
-  axis(1, at = x.ticks, tck = -0.025, col = offblack, labels = NA)
-  sapply(1:length(x.ticks), function(x) {
-    axis(1,
-      at = x.ticks[x], tick = F, line = -0.65, labels = x.ticks[x] / 1000
-      # cex.axis = 1, las = 1
-    )
-  })
-  mtext(1, line = 1.25, text = x.axis.title)
-
-  # Add Y axis
-  axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
-  if (min(mu$mu) >= min(log10(logscale.major))) {
-    y.ax.at <- log10(logscale.major)
-    axis(2, at = log10(logscale.minor), tck = -0.0125, col = offblack, labels = NA)
-  } else {
-    y.ax.at <- floor(min(mu$mu)):log10(max(logscale.major))
-  }
-  axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
-  sapply(y.ax.at, function(y) {
-    axis(2,
-      at = y, tick = F, line = -0.65, labels = bquote(10^.(y)),
-      cex.axis = 0.5, las = 2
-    )
-  })
-  mtext(2, line = 1.25, text = y.axis.title)
-
-  # Add title
-  mtext(3, font = 2, text = title, xpd = T)
-}
-
 
 ###########
 # RScript #
 ###########
 # List of command-line options
 option_list <- list(
-  make_option(c("--distance"),
-    help = "Plot mutation rate against bin pair distance [default %default].",
-    action = "store_true", default = FALSE
-  ),
   make_option(c("--cnv"),
     help = "Specify CNV type. Used for plotting colors only.",
     type = "character", default = NA
   ),
+  make_option(c("--title"),
+    help = "Custom title [default '%default']",
+    type = "character", default = "Mutation rate"
+  ),
   make_option(c("--x-title"),
-    help = "Custom X-axis title",
-    type = "character", default = NULL
+    help = "Custom X-axis title [default '%default']",
+    type = "character", default = "CNVs per allele per generation"
   ),
   make_option(c("--y-title"),
-    help = "Custom Y-axis title",
-    type = "character", default = NULL
+    help = "Custom Y-axis title [default '%default']",
+    type = "character", default = "Loci"
   )
 )
 
@@ -235,23 +154,24 @@ if (length(args$args) != 2) {
 # Writes args & opts to vars
 mu.in <- args$args[1]
 out.prefix <- args$args[2]
-plot.distance <- opts$distance
 cnv <- opts$cnv
+title <- opts$title
 x.title <- opts$`x-title`
 y.title <- opts$`y-title`
 
 # Load mutation rates
 mu <- load.mu.tsv(mu.in)
 
-pdf(paste(out.prefix, "mutation_rate.pdf", sep = "."),
+# Compute bin size
+binsize <- infer.bin.size(mu)
+
+# Plot histogram of mutation rates
+pdf(paste(out.prefix, "mutation_rate.hist.pdf", sep = "."),
   height = 3, width = 4.5
 )
-if (plot.distance) {
-  # Plot mutation rate by bin pair distance
-  mu.distance(mu, cnv, x.title, y.title)
-} else {
-  # Plot histogram of mutation rates
-  mu.hist(mu, cnv, x.title, y.title)
-}
+mu.hist(mu,
+  cnv = cnv, x.axis.title = x.title,
+  y.axis.title = y.title, title = title
+)
 dev.off()
 

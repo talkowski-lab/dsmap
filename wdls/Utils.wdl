@@ -299,12 +299,12 @@ task MakeTarball {
 }
 
 
-# Plots a distribution of CNV mutation rates over all targets/query entities
-task PlotMuDist {
+# Plots a histogram of CNV mutation rates over all targets/query entities
+task PlotMuHist {
   input {
     File mu_tsv
     String cnv
-    Boolean distance = false
+    String? title
     String? x_title
     String? y_title
     String out_prefix
@@ -329,19 +329,22 @@ task PlotMuDist {
 
     # Build & execute command
     plot_cmd="/opt/dsmap/scripts/mu/plot_mu_distrib.R --cnv ~{cnv}"
+    if [ ~{defined(title)} == "true" ]; then
+      plot_cmd="$plot_cmd --title \"~{title}\""
+    fi
     if [ ~{defined(x_title)} == "true" ]; then
       plot_cmd="$plot_cmd --x-title \"~{x_title}\""
     fi
     if [ ~{defined(y_title)} == "true" ]; then
       plot_cmd="$plot_cmd --y-title \"~{y_title}\""
     fi
-    plot_cmd="$plot_cmd ~{true='--distance' false='' distance} ~{mu_tsv} ~{out_prefix}"
+    plot_cmd="$plot_cmd ~{mu_tsv} ~{out_prefix}"
     echo -e "Now plotting mutation rate histogram using command:\n$plot_cmd"
     eval $plot_cmd
   >>>
 
   output {
-    File mu_dist = "~{out_prefix}.mutation_rate.pdf"
+    File mu_hist = "~{out_prefix}.mutation_rate.hist.pdf"
   }
 
   runtime {

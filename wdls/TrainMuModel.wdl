@@ -149,23 +149,32 @@ workflow TrainMuModel {
 
     # Plot mutation rate distribution in each chromosome
     scatter ( contig_mu in contig_mus ) {
-      call Utils.PlotMuDist as PlotMuHistChrom{
+      call Utils.PlotMuHist as PlotMuPairsHistChrom{
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
           x_title="~{cnv}s per allele per generation",
           y_title="Bin pairs",
-          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}.hist",
+          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
-      call Utils.PlotMuDist as PlotMuBySizeChrom{
+      call PlotMuPairs as PlotMuPairsHeatmapChrom{
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
-          x_title="Pair distance (kb)",
-          y_title="~{cnv}s per allele per generation",
-          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}.size",
+          title="~{contig_mu.left} {cnv} mutation rate",
+          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
+          distance=false,
+          dsmap_r_docker=dsmap_r_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call PlotMuPairs as PlotMuPairsBySizeChrom{
+        input:
+          mu_tsv=contig_mu.right,
+          cnv=cnv,
+          title="~{contig_mu.left} {cnv} mutation rate density by pair distance",
+          out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           distance=true,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -183,23 +192,22 @@ workflow TrainMuModel {
     }
 
     # Plot overall mutation rate distribution
-    call Utils.PlotMuDist as PlotMuHistAll{
+    call Utils.PlotMuHist as PlotMuPairsHistAll{
       input:
         mu_tsv=MergeMus.merged_bed,
         cnv=cnv,
         x_title="~{cnv}s per allele per generation",
         y_title="Bin pairs",
-        out_prefix="~{prefix}.~{cnv}.hist",
+        out_prefix="~{prefix}.~{cnv}",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
-    call Utils.PlotMuDist as PlotMuBySizeAll{
+    call PlotMuPairs as PlotMuPairsBySizeAll{
       input:
         mu_tsv=MergeMus.merged_bed,
         cnv=cnv,
-        x_title="Pair distance (kb)",
-        y_title="~{cnv}s per allele per generation",
-        out_prefix="~{prefix}.~{cnv}.size",
+        title="{cnv} mutation rate density by pair distance",
+        out_prefix="~{prefix}.~{cnv}",
         distance=true,
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics
@@ -227,8 +235,9 @@ workflow TrainMuModel {
     }
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
-        files_to_tar=flatten([PlotMuHistChrom.mu_dist, PlotMuBySizeChrom.mu_dist,
-                              [PlotMuHistAll.mu_dist, PlotMuBySizeAll.mu_dist]]),
+        files_to_tar=[PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist, 
+                      PlotMuPairsBySizeChrom.mu_dist, PlotMuPairsHistAll.mu_hist,
+                      PlotMuPairsBySizeAll.mu_dist],
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
@@ -420,6 +429,59 @@ task PlotTrainingDiagnostics {
     Array[File] all_outputs = glob("outputs/~{prefix}*")
   }
   
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Plot CNV mutation rate distribution across bin pairs
+task PlotMuPairs {
+  input {
+    File mu_tsv
+    String cnv
+    Boolean distance
+    String? title
+    String out_prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(mu_tsv, "GB")),
+    boot_disk_gb: 15,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Build & execute command
+    plot_cmd="/opt/dsmap/scripts/mu/plot_mu_pairs.R --cnv ~{cnv}"
+    if [ ~{defined(title)} == "true" ]; then
+      plot_cmd="$plot_cmd --title \"~{title}\""
+    fi
+    plot_cmd="$plot_cmd ~{true='--distance' false='' distance} ~{mu_tsv} ~{out_prefix}"
+    echo -e "Now plotting mutation rate distribution using command:\n$plot_cmd"
+    eval $plot_cmd
+  >>>
+
+  output {
+    File mu_dist = "~{out_prefix}.mutation_rate." + (if distance then "size" else "heatmap") + ".pdf"
+  }
+
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"

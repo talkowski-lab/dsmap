@@ -159,7 +159,7 @@ workflow CalcSegmentDosageSensitivity {
   if ( run_diagnostics ) {
 
     # Plot mutation rates per segment
-    call Utils.PlotMuDist as PlotDelMu {
+    call Utils.PlotMuHist as PlotDelMu {
       input:
         mu_tsv=MergeDelData.merged_tsv,
         cnv="DEL",
@@ -169,7 +169,7 @@ workflow CalcSegmentDosageSensitivity {
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_plot_mu_hist
     }
-    call Utils.PlotMuDist as PlotDupMu {
+    call Utils.PlotMuHist as PlotDupMu {
       input:
         mu_tsv=MergeDupData.merged_tsv,
         cnv="DUP",
@@ -183,7 +183,7 @@ workflow CalcSegmentDosageSensitivity {
     # Tar diagnostics, for convenience
     call Utils.MakeTarball as MergeDiagnostics {
       input:
-        files_to_tar=[PlotDelMu.mu_dist, PlotDupMu.mu_dist],
+        files_to_tar=[PlotDelMu.mu_hist, PlotDupMu.mu_hist],
         tarball_prefix="~{prefix}.CalcSegmentDosageSensitivity.diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_merge_diagnostics
