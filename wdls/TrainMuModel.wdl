@@ -153,8 +153,9 @@ workflow TrainMuModel {
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
+          title="~{contig_mu.left} ~{cnv} mutation rate",
           x_title="~{cnv}s per allele per generation",
-          y_title="Bin pairs",
+          y_title="Bin-pairs",
           out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -163,7 +164,7 @@ workflow TrainMuModel {
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
-          title="~{contig_mu.left} {cnv} mutation rate",
+          title="~{contig_mu.left} ~{cnv} mutation rate",
           out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           distance=false,
           dsmap_r_docker=dsmap_r_docker,
@@ -173,7 +174,7 @@ workflow TrainMuModel {
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
-          title="~{contig_mu.left} {cnv} mutation rate density by pair distance",
+          title="~{contig_mu.left} ~{cnv} mutation rate density by pair distance",
           out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           distance=true,
           dsmap_r_docker=dsmap_r_docker,
@@ -196,8 +197,9 @@ workflow TrainMuModel {
       input:
         mu_tsv=MergeMus.merged_bed,
         cnv=cnv,
+        title="~{cnv} mutation rate",
         x_title="~{cnv}s per allele per generation",
-        y_title="Bin pairs",
+        y_title="Bin-pairs",
         out_prefix="~{prefix}.~{cnv}",
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_override=runtime_attr_diagnostics
@@ -206,7 +208,7 @@ workflow TrainMuModel {
       input:
         mu_tsv=MergeMus.merged_bed,
         cnv=cnv,
-        title="{cnv} mutation rate density by pair distance",
+        title="~{cnv} mutation rate density by pair distance",
         out_prefix="~{prefix}.~{cnv}",
         distance=true,
         dsmap_r_docker=dsmap_r_docker,
@@ -235,9 +237,9 @@ workflow TrainMuModel {
     }
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
-        files_to_tar=[PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist, 
-                      PlotMuPairsBySizeChrom.mu_dist, PlotMuPairsHistAll.mu_hist,
-                      PlotMuPairsBySizeAll.mu_dist],
+        files_to_tar=flatten([[PlotMuPairsHistChrom.mu_hist, PlotMuPairsHistAll.mu_hist],
+                      PlotMuPairsHeatmapChrom.mu_dists, PlotMuPairsBySizeChrom.mu_dists,
+                      PlotMuPairsBySizeAll.mu_dists]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
@@ -479,7 +481,7 @@ task PlotMuPairs {
   >>>
 
   output {
-    File mu_dist = "~{out_prefix}.mutation_rate." + (if distance then "size" else "heatmap") + ".pdf"
+    Array[File] mu_dists = glob("~{out_prefix}.mutation_rate.*.pdf")
   }
 
   runtime {
