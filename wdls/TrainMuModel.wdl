@@ -237,9 +237,9 @@ workflow TrainMuModel {
     }
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
-        files_to_tar=flatten([[PlotMuPairsHistChrom.mu_hist, PlotMuPairsHistAll.mu_hist],
-                      PlotMuPairsHeatmapChrom.mu_dists, PlotMuPairsBySizeChrom.mu_dists,
-                      PlotMuPairsBySizeAll.mu_dists]),
+        files_to_tar=flatten([[PlotMuPairsHistAll.mu_hist, PlotMuPairsBySizeAll.mu_dist],
+                              PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist,
+                              PlotMuPairsBySizeChrom.mu_dist]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
@@ -481,7 +481,7 @@ task PlotMuPairs {
   >>>
 
   output {
-    Array[File] mu_dists = glob("~{out_prefix}.mutation_rate.*.pdf")
+    File mu_dist = "~{out_prefix}.mutation_rate." + (if distance then "size" else "heatmap") + ".pdf"
   }
 
   runtime {
