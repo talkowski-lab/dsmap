@@ -172,13 +172,14 @@ mu.heatmap <- function(mu, binsize, title = "Mutation rate") {
   x.axis.title <- "Coordinates"
   legend.title <- "log10(mu)"
 
-  # Set plot limits (in rotated coordinates)
+  # Set plot limits
   # Note: X axis starts at first bin pair starting coordinate, Y axis starts at 0
-  x.min <- min(mu$start)
-  raw.x.max <- max(mu$end)
-  x.max <- rotate.points(matrix(c(raw.x.max, raw.x.max - x.min), nrow = 1), angle = -45, x.origin = x.min)$x
+  x.min <- y.min <- min(mu$start)
+  x.max <- max(mu$end)
   diag.coords <- mu[min(which((mu$end - mu$start) == max(mu$end - mu$start))), c("start", "end")]
-  y.max <- rotate.points(matrix(c(diag.coords[1], diag.coords[2] - x.min), nrow = 1), angle = -45, x.origin = x.min)$y
+  y.max <- rotate.points(matrix(c(diag.coords[1], diag.coords[2]), nrow = 1),
+    angle = -45, x.origin = x.min, y.origin = y.min
+  )$y
 
   # Choose color palette
   n.colors <- 101
@@ -203,12 +204,19 @@ mu.heatmap <- function(mu, binsize, title = "Mutation rate") {
   mtext(3, line = 0.25, text = legend.title, cex = 0.9)
 
   # Prep plot area for heatmap
-  prep.plot.area(xlims = c(x.min, x.max), ylims = c(0, y.max), parmar = c(2.5, 1, 1.5, 1))
+  prep.plot.area(xlims = c(x.min, x.max), ylims = c(y.min, y.max), parmar = c(2.5, 1, 1.5, 1))
 
-  # Add rectangles for each bin pair
+  # Calculate rotated coordinates of rectangles for each bin pair using NA
+  # to delimit each rectangle
+  # Note: X-coordinates are adjusted to return to original scale
+  # so that axis labels match true coordinates
   rect.x <- unlist(lapply(mu$start, function(s) c(s, s + binsize, s + binsize, s, NA)))
-  rect.y <- unlist(lapply(mu$end - x.min, function(e) c(e - binsize, e - binsize, e, e, NA)))
-  rotated.coords <- rotate.points(data.frame("x" = rect.x, "y" = rect.y), angle = -45, x.origin = x.min)
+  rect.y <- unlist(lapply(mu$end, function(e) c(e - binsize, e - binsize, e, e, NA)))
+  rotated.coords <- rotate.points(data.frame("x" = rect.x, "y" = rect.y),
+    angle = -45, x.origin = x.min, y.origin = y.min
+  )
+  rotated.coords$x <- (rotated.coords$x - x.min) / sqrt(2) + x.min
+  # Add rectangles for each bin pair
   polygon(
     x = rotated.coords$x, y = rotated.coords$y,
     border = heat.pal[mu.vals],
