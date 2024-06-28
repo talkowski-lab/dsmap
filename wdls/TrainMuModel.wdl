@@ -182,7 +182,7 @@ task IntersectSVs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
+    mem_gb: 16,
     disk_gb: 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
