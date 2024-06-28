@@ -180,13 +180,13 @@ task IntersectSVs {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 16,
-    disk_gb: 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
+  RuntimeAttr default_attr = {
+    "cpu_cores": 1, 
+    "mem_gb": 16,
+    "disk_gb": 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
+    "boot_disk_gb": 10,
+    "preemptible_tries": 3,
+    "max_retries": 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
@@ -217,13 +217,13 @@ task IntersectSVs {
   }
   
   runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    cpu: runtime_attr["cpu_cores"]
+    memory: runtime_attr["mem_gb"] + " GiB"
+    disks: "local-disk " + runtime_attr["disk_gb"] + " HDD"
+    bootDiskSizeGb: runtime_attr["boot_disk_gb"]
+    preemptible: runtime_attr["preemptible_tries"]
+    maxRetries: runtime_attr["max_retries"]
     docker: athena_cloud_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -241,13 +241,13 @@ task GetPairDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 10 + ceil(2 * (size(all_pairs, "GB") + size(training_pairs, "GB"))),
-    boot_disk_gb: 20,
-    preemptible_tries: 3,
-    max_retries: 1
+  RuntimeAttr default_attr = {
+    "cpu_cores": 1, 
+    "mem_gb": 4,
+    "disk_gb": 10 + ceil(2 * (size(all_pairs, "GB") + size(training_pairs, "GB"))),
+    "boot_disk_gb": 20,
+    "preemptible_tries": 3,
+    "max_retries": 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
@@ -280,13 +280,13 @@ task GetPairDiagnostics {
   }
   
   runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    cpu: runtime_attr["cpu_cores"]
+    memory: runtime_attr["mem_gb"] + " GiB"
+    disks: "local-disk " + runtime_attr["disk_gb"] + " HDD"
+    bootDiskSizeGb: runtime_attr["boot_disk_gb"]
+    preemptible: runtime_attr["preemptible_tries"]
+    maxRetries: runtime_attr["max_retries"]
     docker: dsmap_r_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -305,12 +305,12 @@ task PlotTrainingDiagnostics {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 10 + ceil(2 * size([stats_tsv, calibration_tsv], "GB")),
-    boot_disk_gb: 20,
-    preemptible_tries: 3,
-    max_retries: 1
+    "cpu_cores": 1, 
+    "mem_gb": 4,
+    "disk_gb": 10 + ceil(2 * size([stats_tsv, calibration_tsv], "GB")),
+    "boot_disk_gb": 20,
+    "preemptible_tries": 3,
+    "max_retries": 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
@@ -337,13 +337,13 @@ task PlotTrainingDiagnostics {
   }
   
   runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    cpu: runtime_attr["cpu_cores"]
+    memory: runtime_attr["mem_gb"] + " GiB"
+    disks: "local-disk " + runtime_attr["disk_gb"] + " HDD"
+    bootDiskSizeGb: runtime_attr["boot_disk_gb"]
+    preemptible: runtime_attr["preemptible_tries"]
+    maxRetries: runtime_attr["max_retries"]
     docker: dsmap_r_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -364,12 +364,12 @@ task TrainModel {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 20 + ceil(2 * size(training_beds, "GB")),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
+    "cpu_cores": 1, 
+    "mem_gb": 8,
+    "disk_gb": 20 + ceil(2 * size(training_beds, "GB")),
+    "boot_disk_gb": 10,
+    "preemptible_tries": 3,
+    "max_retries": 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
@@ -405,13 +405,13 @@ task TrainModel {
   }
   
   runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    cpu: runtime_attr["cpu_cores"]
+    memory: runtime_attr["mem_gb"] + " GiB"
+    disks: "local-disk " + runtime_attr["disk_gb"] + " HDD"
+    bootDiskSizeGb: runtime_attr["boot_disk_gb"]
+    preemptible: runtime_attr["preemptible_tries"]
+    maxRetries: runtime_attr["max_retries"]
     docker: athena_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
