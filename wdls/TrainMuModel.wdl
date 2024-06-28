@@ -304,7 +304,7 @@ task PlotTrainingDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
+  RuntimeAttr default_attr = {
     "cpu_cores": 1, 
     "mem_gb": 4,
     "disk_gb": 10 + ceil(2 * size([stats_tsv, calibration_tsv], "GB")),
@@ -363,7 +363,7 @@ task TrainModel {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
+  RuntimeAttr default_attr = {
     "cpu_cores": 1, 
     "mem_gb": 8,
     "disk_gb": 20 + ceil(2 * size(training_beds, "GB")),
