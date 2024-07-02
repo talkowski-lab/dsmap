@@ -17,3 +17,4 @@ Additional details for each dataset are provided in the table below:
 | hg38 FASTA index (primary contigs only) | `hg38.contigs.fai` | N/A | Fasta index for hg38 reference genome assembly restricted to primary contigs |  
 | hg38 FASTA dictionary | `hg38.dict` | N/A | Fasta dictionary for hg38 reference genome assembly |  
 | hg38 N-masked intervals | `hg38.nmask.bed.gz` | N/A | Intervals masked by N bases in the hg38 reference genome assembly |  
+| hg38 centromere intervals | `hg38.centromeres.bed.gz` | UCSC browser hg38 centromeres | Intervals spanning smallest to largest centromeric coordinates |  
