@@ -29,7 +29,7 @@ workflow BinAndAnnotateGenome {
     File? ref_fasta
 
     # Bin inputs
-    File bin_exclusion_mask
+    Array[File] bin_exclusion_mask
     Int bin_size
     Int bins_per_shard
     File? bin_annotations_list_localize
@@ -38,7 +38,7 @@ workflow BinAndAnnotateGenome {
     File? snv_mutrates_tsv
     
     # Pair inputs
-    File? pair_exclusion_mask
+    Array[File]? pair_exclusion_mask
     Int max_pair_distance
     Int bins_per_pair_shard
     File? pair_annotations_list_localize
@@ -242,7 +242,7 @@ task MakeBins {
   input {
     File contigs_fai
     Int bin_size
-    File bin_exclusion_mask
+    Array[File] bin_exclusion_mask
     String prefix
     
     String athena_docker
@@ -268,7 +268,7 @@ task MakeBins {
 
     # Make bins & tabix output BED
     athena make-bins \
-      --exclusion-list-all ~{bin_exclusion_mask} \
+      --exclusion-list-all ~{sep='--exclusion-list-all ' bin_exclusion_mask} \
       --buffer ~{bin_size} \
       --include-chroms $( cut -f1 contigs.genome | paste -s -d, ) \
       --bgzip \

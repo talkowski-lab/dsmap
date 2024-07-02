@@ -22,7 +22,7 @@ workflow MakeAndAnnotatePairsSingleChrom {
     File bins
     File bins_idx
     File bedtools_genome_file
-    File? pair_exclusion_mask
+    Array[File]? pair_exclusion_mask
     String contig
     Int max_pair_distance
     Int shard_size
@@ -137,7 +137,7 @@ task MakePairs {
     File all_bins_idx
     Int max_pair_distance
     String prefix
-    File? pair_exclusion_mask
+    Array[File]? pair_exclusion_mask
 
     String athena_docker
 
@@ -156,12 +156,11 @@ task MakePairs {
 
   command {
     set -euo pipefail
-    touch empty.txt
 
     # Build options for athena pair-bins
     athena_options=""
     if [ "~{defined(pair_exclusion_mask)}" == "true" ]; then
-      athena_options="$athena_options --exclusion-list ~{default='empty.txt' pair_exclusion_mask}"
+      athena_options="$athena_options --exclusion-list ~{sep='--exclusion-list ' pair_exclusion_mask}"
     fi
 
     # Pair bins with athena
