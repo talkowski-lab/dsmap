@@ -182,10 +182,10 @@ task IntersectSVs {
 
   RuntimeAttr default_attr = {
     "cpu_cores": 1, 
-    "mem_gb": 32,
-    "disk_gb": 10 + ceil(2 * size([vcf, pairs_bed], "GB")),
+    "mem_gb": 64,
+    "disk_gb": 50,
     "boot_disk_gb": 10,
-    "preemptible_tries": 3,
+    "preemptible_tries": 1,
     "max_retries": 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
