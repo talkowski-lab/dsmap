@@ -31,8 +31,8 @@ dsmapR::load.constants(c("colors"))
 # Load data
 load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles = 100) {
     # Load data files:
-    # gene coding DEL, coding DUP, and copy-gain DUP observed and expected counts
-    # gene constraint scores
+    # 1. gene coding DEL, coding DUP, and copy-gain DUP observed and expected counts
+    # 2. gene constraint scores
     print("Loading DELs...")
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "gene"
