@@ -328,7 +328,7 @@ task PlotMuHist {
     set -euo pipefail
 
     # Build & execute command
-    plot_cmd="/opt/dsmap/scripts/mu/plot_mu_distrib.R --cnv ~{cnv}"
+    plot_cmd="/opt/dsmap/analysis/mu/plot_mu_distrib.R --cnv ~{cnv}"
     if [ ~{defined(title)} == "true" ]; then
       plot_cmd="$plot_cmd --title \"~{title}\""
     fi

@@ -21,6 +21,7 @@ This repository contains the working code and scripts used to:
 
 | Directory | Description |  
 | :--- | :--- |  
+| [`analysis/`](https://github.com/talkowski-lab/dsmap/tree/main/analysis) | Model analysis & validation |  
 | [`annotations/`](https://github.com/talkowski-lab/dsmap/tree/main/annotations) | Processing of genome annotations |  
 | [`CMA/`](https://github.com/talkowski-lab/dsmap/tree/main/cma) | Processing & analysis of chromosomal microarray datasets |  
 | [`cromwell/`](https://github.com/talkowski-lab/dsmap/tree/main/cromwell) | Resources for executing cloud workflows on Cromwell |  

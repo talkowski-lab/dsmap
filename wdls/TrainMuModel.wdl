@@ -359,7 +359,7 @@ task GetPairDiagnostics {
 
     # Get diagnostics
     mkdir outputs/
-    /opt/dsmap/scripts/mu/get_pair_diagnostics.R \
+    /opt/dsmap/analysis/mu/get_pair_diagnostics.R \
       --cnv ~{cnv} \
       ~{prefix}.pairs.bed.gz \
       ~{prefix}.training.bed.gz \
@@ -415,13 +415,13 @@ task PlotTrainingDiagnostics {
     mkdir outputs/
 
     # Plot stats
-    /opt/dsmap/scripts/mu/plot_training_stats.R \
+    /opt/dsmap/analysis/mu/plot_training_stats.R \
       --cnv ~{cnv} \
       ~{stats_tsv} \
       outputs/~{prefix}.training_stats.pdf
 
     # Plot calibration
-    /opt/dsmap/scripts/mu/plot_calibration.R \
+    /opt/dsmap/analysis/mu/plot_calibration.R \
       --cnv ~{cnv} \
       ~{calibration_tsv} \
       outputs/~{prefix}.calibration.pdf
@@ -471,7 +471,7 @@ task PlotMuPairs {
     set -euo pipefail
 
     # Build & execute command
-    plot_cmd="/opt/dsmap/scripts/mu/plot_mu_pairs.R --cnv ~{cnv}"
+    plot_cmd="/opt/dsmap/analysis/mu/plot_mu_pairs.R --cnv ~{cnv}"
     if [ ~{defined(title)} == "true" ]; then
       plot_cmd="$plot_cmd --title \"~{title}\""
     fi

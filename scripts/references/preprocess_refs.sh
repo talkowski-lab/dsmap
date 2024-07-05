@@ -21,7 +21,7 @@ curl -O https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/centromeres.txt
 zcat < centromeres.txt.gz \
 | awk -F'\t' -v OFS='\t' '{print $2, $3, $4}' \
 | sort -Vk1,1 -k2,2n -k3,3n \
-| bedtools groupby -i hg38.centromeres.all.bed.gz -g 1 -c 2,2 -o min,max \
+| bedtools groupby -g 1 -c 2,2 -o min,max \
 | bgzip -c \
 > hg38.centromeres.bed.gz
 

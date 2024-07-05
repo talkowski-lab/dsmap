@@ -246,9 +246,6 @@ compute.z.by.quantile <- function(bin.scores, quantile.stats) {
     ))
 }
 
-# train 0135 from boston on saturday july 13 at 1:35pm
-# and arrive at 5:52pm
-
 
 ######################
 # Plotting functions #
