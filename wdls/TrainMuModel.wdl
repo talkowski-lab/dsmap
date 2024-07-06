@@ -25,7 +25,9 @@ workflow TrainMuModel {
     File vcf_idx
     String pairs_bucket
     String? pairs_bed_prefix
+    Int bin_size
     File contigs_fai
+    File contig_sizes
     File training_mask
     File athena_training_config
     String model
@@ -215,6 +217,42 @@ workflow TrainMuModel {
         runtime_attr_override=runtime_attr_diagnostics
     }
 
+    # Generate bigWig tracks for UCSC browser summarizing mu over all bin pairs at each bin
+    # Note: Aggregation functions are limited to those accepted by bedtools groupby
+    call AggregateBinMu as BinMuMedian {
+      input:
+        contigs=contigs,
+        contig_mus=PredictMu.pairs_w_mu,
+        contig_sizes=contig_sizes,
+        bin_size=bin_size,
+        out_prefix="~{prefix}.~{cnv}",
+        agg="median",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+    call AggregateBinMu as BinMuMin {
+      input:
+        contigs=contigs,
+        contig_mus=PredictMu.pairs_w_mu,
+        contig_sizes=contig_sizes,
+        bin_size=bin_size,
+        out_prefix="~{prefix}.~{cnv}",
+        agg="min",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+    call AggregateBinMu as BinMuMax {
+      input:
+        contigs=contigs,
+        contig_mus=PredictMu.pairs_w_mu,
+        contig_sizes=contig_sizes,
+        bin_size=bin_size,
+        out_prefix="~{prefix}.~{cnv}",
+        agg="max",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_diagnostics
+    }
+
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeTrainInputDiagnostics {
       input:
@@ -238,6 +276,7 @@ workflow TrainMuModel {
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
         files_to_tar=flatten([[PlotMuPairsHistAll.mu_hist, PlotMuPairsBySizeAll.mu_dist],
+                              [BinMuMedian.mu_agg_bw, BinMuMin.mu_agg_bw, BinMuMax.mu_agg_bw],
                               PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist,
                               PlotMuPairsBySizeChrom.mu_dist]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
@@ -313,6 +352,74 @@ task IntersectSVs {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: athena_cloud_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Train a CNV mutation rate model
+task TrainModel {
+  input {
+    Array[File] training_beds
+    String model
+    File contigs_fai
+    File athena_training_config
+    Array[Int] contig_pair_counts
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 8,
+    disk_gb: 20 + ceil(2 * size(training_beds, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Get total number of pairs across all contigs
+    n_gw_pairs=$( python -c "print(~{sep="+" contig_pair_counts})" )
+
+    # Build list of training BEDs per contig
+    while read contig; do
+      fgrep -w "$contig.training.bed.gz" ~{write_lines(training_beds)} \
+      | awk -v OFS="\t" -v contig="$contig" '{ print contig, $0 }'
+    done < <( cut -f1 ~{contigs_fai} ) \
+    > training_beds.tsv
+
+    # Train model
+    athena_cmd="athena mu-train --training-data training_beds.tsv"
+    athena_cmd="$athena_cmd --config ~{athena_training_config}"
+    athena_cmd="$athena_cmd --n-gw-pairs $n_gw_pairs"
+    athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
+    athena_cmd="$athena_cmd --stats-outfile ~{prefix}.~{model}.training_stats.tsv"
+    athena_cmd="$athena_cmd --calibration-outfile ~{prefix}.~{model}.calibration.tsv"
+    echo -e "Now training mutation rate model using command:\n$athena_cmd"
+    eval $athena_cmd
+    gzip -f ~{prefix}.~{model}.calibration.tsv
+  >>>
+
+  output {
+    File trained_model = "~{prefix}.~{model}.trained.pt"
+    File stats_tsv = "~{prefix}.~{model}.training_stats.tsv"
+    File calibration_tsv = "~{prefix}.~{model}.calibration.tsv.gz"
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -496,26 +603,26 @@ task PlotMuPairs {
 }
 
 
-# Train a CNV mutation rate model
-task TrainModel {
+# Generate bigWig file summarizing mu over all bin pairs at each bin
+task AggregateBinMu {
   input {
-    Array[File] training_beds
-    String model
-    File contigs_fai
-    File athena_training_config
-    Array[Int] contig_pair_counts
-    String prefix
+    Array[String] contigs
+    Array[File] contig_mus
+    File contig_sizes
+    Int bin_size
+    String out_prefix
+    String agg = "median"
 
     String athena_docker
 
     RuntimeAttr? runtime_attr_override
   }
-
+  
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 20 + ceil(2 * size(training_beds, "GB")),
-    boot_disk_gb: 10,
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(contig_mus, "GB")),
+    boot_disk_gb: 15,
     preemptible_tries: 3,
     max_retries: 1
   }
@@ -523,35 +630,35 @@ task TrainModel {
 
   command <<<
     set -euo pipefail
+    
+    # Initialize wig file
+    touch mu_agg.wig
 
-    # Get total number of pairs across all contigs
-    n_gw_pairs=$( python -c "print(~{sep="+" contig_pair_counts})" )
+    # Add bin-level mu agg information for each contig
+    while read contig mu_tsv; do
+      (echo "variableStep chrom=${contig} span=~{bin_size}" && \
+        ({
+          bedtools groupby -i ${mu_tsv} -g 1,2 -c 4 -o ~{agg} ;
+          bedtools groupby -i ${mu_tsv} -g 1,3 -c 4 -o ~{agg} ;
+          } \
+          | sort -Vk1,1 -k2,2n \
+          | bedtools groupby -g 1,2 -c 3 -o ~{agg} \
+          | awk -F'\t' -v OFS='\t' '{print $2+1,$3}' \
+        ) \
+      ) \
+    done < <(paste ~{write_lines(contigs)} ~{write_lines(contig_mus)}) \
+    >> mu_agg.wig
 
-    # Build list of training BEDs per contig
-    while read contig; do
-      fgrep -w "$contig.training.bed.gz" ~{write_lines(training_beds)} \
-      | awk -v OFS="\t" -v contig="$contig" '{ print contig, $0 }'
-    done < <( cut -f1 ~{contigs_fai} ) \
-    > training_beds.tsv
-
-    # Train model
-    athena_cmd="athena mu-train --training-data training_beds.tsv"
-    athena_cmd="$athena_cmd --config ~{athena_training_config}"
-    athena_cmd="$athena_cmd --n-gw-pairs $n_gw_pairs"
-    athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
-    athena_cmd="$athena_cmd --stats-outfile ~{prefix}.~{model}.training_stats.tsv"
-    athena_cmd="$athena_cmd --calibration-outfile ~{prefix}.~{model}.calibration.tsv"
-    echo -e "Now training mutation rate model using command:\n$athena_cmd"
-    eval $athena_cmd
-    gzip -f ~{prefix}.~{model}.calibration.tsv
+    # Convert to bigWig
+    wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/wigToBigWig
+    chmod a+x wigToBigWig
+    ./wigToBigWig mu_agg.wig ~{contig_sizes} ~{out_prefix}.mu.~{agg}.bw
   >>>
 
   output {
-    File trained_model = "~{prefix}.~{model}.trained.pt"
-    File stats_tsv = "~{prefix}.~{model}.training_stats.tsv"
-    File calibration_tsv = "~{prefix}.~{model}.calibration.tsv.gz"
+    File mu_agg_bw = "~{out_prefix}.mu.~{agg}.bw"
   }
-  
+
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
@@ -562,4 +669,3 @@ task TrainModel {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
