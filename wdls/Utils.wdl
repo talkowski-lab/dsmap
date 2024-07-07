@@ -357,3 +357,68 @@ task PlotMuHist {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+# Infer bin size from bin-pairs based on a file sample
+task InferBinSize {
+  input {
+    File bin_pairs_tsv
+    Boolean is_bgzipped = true
+    Int? sample_size = 1000
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(bin_pairs_tsv, "GB")),
+    boot_disk_gb: 15,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    if [ "~{is_bgzipped}" == "true" ]; then
+      contig=$(zcat ~{bin_pairs_tsv} | head -n 1 | awk 'print $1')
+      zcat ~{bin_pairs_tsv} \
+      | awk -v OFS='\t' -v contig="$contig" '$1==contig {print $2}' \
+      | sort -k2,2n | uniq \
+      > uniq_bin_starts.txt
+    else
+      contig=$(head -n 1 ~{bin_pairs_tsv} | awk 'print $1')
+      awk -v OFS='\t' -v contig="$contig" '$1==contig {print $2}' ~{bin_pairs_tsv} \
+      | sort -k2,2n | uniq \
+      > uniq_bin_starts.txt
+    fi
+
+    if [ "~{defined(sample_size)}" == "true" ]; then
+      head -n ~{sample_size} uniq_bin_starts.txt > bin_starts.txt
+    else
+      mv uniq_bin_starts.txt bin_starts.txt
+    fi
+
+    paste <(tail -n+2 bin_starts.txt) <(head -n-1 bin_starts.txt) \
+    | awk -v OFS='\t' '{print $1-$2}' | sort -k1,1n | head -n 1 \
+    > bin_size.txt
+  >>>
+
+  output {
+    Int bin_size = read_int("bin_size.txt")
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

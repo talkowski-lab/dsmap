@@ -25,7 +25,6 @@ workflow TrainMuModel {
     File vcf_idx
     String pairs_bucket
     String? pairs_bed_prefix
-    Int bin_size
     File contigs_fai
     File contig_sizes
     File training_mask
@@ -217,38 +216,45 @@ workflow TrainMuModel {
         runtime_attr_override=runtime_attr_diagnostics
     }
 
+    # Infer bin size for use in aggregation function
+    call Utils.InferBinSize as InferBinSize {
+      input:
+        bin_pairs_tsv=PredictMu.pairs_w_mu[0],
+        athena_docker=athena_docker
+    }
+
     # Generate bigWig tracks for UCSC browser summarizing mu over all bin pairs at each bin
     # Note: Aggregation functions are limited to those accepted by bedtools groupby
-    call AggregateBinMu as BinMuMedian {
+    call AggregateBinMu as AggregateBinMuMedian {
       input:
         contigs=contigs,
         contig_mus=PredictMu.pairs_w_mu,
         contig_sizes=contig_sizes,
-        bin_size=bin_size,
-        out_prefix="~{prefix}.~{cnv}",
+        bin_size=InferBinSize.bin_size,
         agg="median",
+        out_prefix="~{prefix}.~{cnv}",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
-    call AggregateBinMu as BinMuMin {
+    call AggregateBinMu as AggregateBinMuMin {
       input:
         contigs=contigs,
         contig_mus=PredictMu.pairs_w_mu,
         contig_sizes=contig_sizes,
-        bin_size=bin_size,
-        out_prefix="~{prefix}.~{cnv}",
+        bin_size=InferBinSize.bin_size,
         agg="min",
+        out_prefix="~{prefix}.~{cnv}",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
-    call AggregateBinMu as BinMuMax {
+    call AggregateBinMu as AggregateBinMuMax {
       input:
         contigs=contigs,
         contig_mus=PredictMu.pairs_w_mu,
         contig_sizes=contig_sizes,
-        bin_size=bin_size,
-        out_prefix="~{prefix}.~{cnv}",
+        bin_size=InferBinSize.bin_size,
         agg="max",
+        out_prefix="~{prefix}.~{cnv}",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_diagnostics
     }
@@ -276,7 +282,8 @@ workflow TrainMuModel {
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
         files_to_tar=flatten([[PlotMuPairsHistAll.mu_hist, PlotMuPairsBySizeAll.mu_dist],
-                              [BinMuMedian.mu_agg_bw, BinMuMin.mu_agg_bw, BinMuMax.mu_agg_bw],
+                              [AggregateBinMuMedian.mu_agg_bw, AggregateBinMuMin.mu_agg_bw,
+                              AggregateBinMuMax.mu_agg_bw],
                               PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist,
                               PlotMuPairsBySizeChrom.mu_dist]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
@@ -610,8 +617,8 @@ task AggregateBinMu {
     Array[File] contig_mus
     File contig_sizes
     Int bin_size
-    String out_prefix
     String agg = "median"
+    String out_prefix
 
     String athena_docker
 
@@ -634,7 +641,7 @@ task AggregateBinMu {
     # Initialize wig file
     touch mu_agg.wig
 
-    # Add bin-level mu agg information for each contig
+    # Aggregate bin-level mu information for each contig
     while read contig mu_tsv; do
       (echo "variableStep chrom=${contig} span=~{bin_size}" && \
         ({
@@ -643,7 +650,7 @@ task AggregateBinMu {
           } \
           | sort -Vk1,1 -k2,2n \
           | bedtools groupby -g 1,2 -c 3 -o ~{agg} \
-          | awk -F'\t' -v OFS='\t' '{print $2+1,$3}' \
+          | awk -v OFS="\t" '{print $2+1,$3}' \
         ) \
       ) \
     done < <(paste ~{write_lines(contigs)} ~{write_lines(contig_mus)}) \
