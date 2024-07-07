@@ -359,7 +359,7 @@ task PlotMuHist {
 }
 
 
-# Infer bin size from bin-pairs based on a file sample
+# Infer bin size from bin-pairs based on a TSV sample
 task InferBinSize {
   input {
     File bin_pairs_tsv
@@ -385,14 +385,15 @@ task InferBinSize {
     set -euo pipefail
 
     if [ "~{is_bgzipped}" == "true" ]; then
-      contig=$(zcat ~{bin_pairs_tsv} | head -n 1 | awk 'print $1')
+      contig=$(zcat ~{bin_pairs_tsv} | grep -v "chr\tstart\tend" \
+      | head -n 1 | awk '{print $1}')
       zcat ~{bin_pairs_tsv} \
-      | awk -v OFS='\t' -v contig="$contig" '$1==contig {print $2}' \
+      | awk -v contig="$contig" '$1==contig {print $2}' \
       | sort -k2,2n | uniq \
       > uniq_bin_starts.txt
     else
-      contig=$(head -n 1 ~{bin_pairs_tsv} | awk 'print $1')
-      awk -v OFS='\t' -v contig="$contig" '$1==contig {print $2}' ~{bin_pairs_tsv} \
+      contig=$(grep -v "chr\tstart\tend" ~{bin_pairs_tsv} | head -n 1  | awk '{print $1}')
+      awk -v contig="$contig" '$1==contig {print $2}' ~{bin_pairs_tsv} \
       | sort -k2,2n | uniq \
       > uniq_bin_starts.txt
     fi
@@ -404,7 +405,7 @@ task InferBinSize {
     fi
 
     paste <(tail -n+2 bin_starts.txt) <(head -n-1 bin_starts.txt) \
-    | awk -v OFS='\t' '{print $1-$2}' | sort -k1,1n | head -n 1 \
+    | awk '{print $1-$2}' | sort -k1,1n | head -n 1 \
     > bin_size.txt
   >>>
 
