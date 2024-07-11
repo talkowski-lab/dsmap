@@ -386,13 +386,13 @@ task InferBinSize {
 
     if [ "~{is_bgzipped}" == "true" ]; then
       contig=$(zcat ~{bin_pairs_tsv} | grep -ve "^#" \
-      | head -n 1 | awk '{print $1}')
+      | sed -n '1p' | awk '{print $1}')
       zcat ~{bin_pairs_tsv} \
       | awk -v contig="$contig" '$1==contig {print $2}' \
       | sort -n | uniq \
       > uniq_bin_starts.txt
     else
-      contig=$(grep -ve "^#" ~{bin_pairs_tsv} | head -n 1  | awk '{print $1}')
+      contig=$(grep -ve "^#" ~{bin_pairs_tsv} | sed -n '1p' | awk '{print $1}')
       awk -v contig="$contig" '$1==contig {print $2}' ~{bin_pairs_tsv} \
       | sort -n | uniq \
       > uniq_bin_starts.txt
@@ -405,7 +405,7 @@ task InferBinSize {
     fi
 
     paste <(tail -n+2 bin_starts.txt) <(head -n-1 bin_starts.txt) \
-    | awk '{print $1-$2}' | sort -n | head -n 1 \
+    | awk '{print $1-$2}' | sort -n | sed -n '1p' \
     > bin_size.txt
   >>>
 
