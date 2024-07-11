@@ -643,10 +643,14 @@ task AggregateBinMu {
 
     # Aggregate bin-level mu information for each contig
     while read contig mu_tsv; do
+      # Remove rows where mu is infinite
+      # TODO: Determine and eliminate source of infinite mus
+      zcat ${mu_tsv} | grep -v "inf" | bgzip -c > mu.tsv
+
       (echo "variableStep chrom=${contig} span=~{bin_size}" && \
         ({
-          bedtools groupby -i ${mu_tsv} -g 1,2 -c 4 -o ~{agg} ;
-          bedtools groupby -i ${mu_tsv} -g 1,3 -c 4 -o ~{agg} ;
+          bedtools groupby -i mu.tsv -g 1,2 -c 4 -o ~{agg} ;
+          bedtools groupby -i mu.tsv -g 1,3 -c 4 -o ~{agg} ;
           } \
           | sort -Vk1,1 -k2,2n \
           | bedtools groupby -g 1,2 -c 3 -o ~{agg} \
