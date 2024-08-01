@@ -54,6 +54,9 @@ workflow BinAndAnnotateGenome {
     Int? max_pcs
     Int? pairs_per_shard_apply_pca
 
+    # Diagnostics options
+    Boolean run_diagnostics = true
+
     # Dockers
     String athena_docker
     String athena_cloud_docker
@@ -70,6 +73,7 @@ workflow BinAndAnnotateGenome {
     RuntimeAttr? runtime_attr_visualize_features
     RuntimeAttr? runtime_attr_learn_pca
     RuntimeAttr? runtime_attr_apply_pca
+    RuntimeAttr? runtime_attr_diagnostics
   }
 
 
@@ -216,6 +220,38 @@ workflow BinAndAnnotateGenome {
           runtime_attr_merge_pairs=runtime_attr_merge_pairs
       }
     }
+
+    # Step 6. Run diagnostics, if optioned
+    if ( run_diagnostics ) {
+
+      # Plot weights on raw features in PCs
+      call Utils.PlotFeatureImportance as PlotFeatureImportance {
+        input:
+          pca_model=LearnPCA.pca_model,
+          prefix="~{prefix}",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call Utils.PlotFeatureImportance as PlotFeatureImportanceVarExplained {
+        input:
+          pca_model=LearnPCA.pca_model,
+          prefix="~{prefix}.variance_explained",
+          norm_variance=true,
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+
+      # Tar all diagnostics for convenience
+      call Utils.MakeTarball as MergeDiagnostics {
+        input:
+          files_to_tar=[PlotFeatureImportance.importance_dist,
+                        PlotFeatureImportanceVarExplained.importance_dist],
+          tarball_prefix="~{prefix}.BinAndAnnotateGenome.diagnostics",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+    }
+
   }
 
   output {
@@ -232,6 +268,8 @@ workflow BinAndAnnotateGenome {
 
     File? pca_model = LearnPCA.pca_model
     File? eigenfeature_stats = LearnPCA.pc_stats
+    
+    File? diagnostics = MergeDiagnostics.tarball
 
   }
 }

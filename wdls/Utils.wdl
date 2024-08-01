@@ -202,6 +202,67 @@ task VisualizeFeatures {
 }
 
 
+# Plot importance of features transformed into principal components
+task PlotFeatureImportance {
+  input {
+    File pca_model
+    File? pc_weights
+    Boolean norm_variance = false
+    Boolean abs = true
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2,
+    disk_gb: 2,
+    boot_disk_gb: 5,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    # Build options for athena feature-importance
+    athena_options=""
+    if [ "~{norm_variance}" == "true" ]; then
+      athena_options="$athena_options --norm-variance"
+    fi
+    [ "~{abs}" == "true" ]; then
+      athena_options="$athena_options --abs"
+    fi
+    if [ "~{defined(pc_weights)}" == "true" ]; then
+      athena_options="$athena_options --pc-weights ~{pc_weights}"
+    fi
+
+    # Plot feature importance matrix
+    athena_cmd="athena feature-importance ~{pca_model} ~{prefix} $athena_options"
+    echo -e "Now plotting feature importance using command:\n$athena_cmd"
+    eval $athena_cmd
+  }
+
+  output {
+    File importance_dist = "~{prefix}.feature_importance.pdf"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
 # Filter an input BED versus an exclusion bed
 task ApplyExclusionBED {
   input {

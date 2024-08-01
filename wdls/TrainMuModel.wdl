@@ -36,6 +36,7 @@ workflow TrainMuModel {
 
     # Diagnostics options
     Boolean run_diagnostics = true
+    File pca_model
 
     # Dockers
     String athena_docker
@@ -87,6 +88,8 @@ workflow TrainMuModel {
   }
 
   # Step 3. Train mutation rate model
+  Boolean model_is_linear = (model == "logit")
+  
   call TrainModel {
     input:
       training_beds=ApplyTrainingMask.filtered_bed,
@@ -94,6 +97,7 @@ workflow TrainMuModel {
       contigs_fai=contigs_fai,
       athena_training_config=athena_training_config,
       contig_pair_counts=IntersectSVs.n_pairs,
+      output_weights=model_is_linear,
       prefix="~{prefix}.~{cnv}",
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_train_model
@@ -259,6 +263,25 @@ workflow TrainMuModel {
         runtime_attr_override=runtime_attr_diagnostics
     }
 
+    # Plot importance of raw features weighted by PC weights in model
+    if (model_is_linear) {
+      call Utils.PlotFeatureImportance as PlotFeatureImportance {
+        input:
+          pca_model=pca_model,
+          pc_weights=TrainModel.weights_txt,
+          prefix="~{prefix}.~{model}.weights",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call Utils.MakeTarball as MergeModelDiagnostics {
+        input:
+          files_to_tar=[PlotFeatureImportance.importance_dist],
+          tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.model_diagnostics",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+    }
+
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeTrainInputDiagnostics {
       input:
@@ -295,8 +318,11 @@ workflow TrainMuModel {
   output {
     Array[File] pairs_w_mu = PredictMu.pairs_w_mu
     Array[File] pairs_w_mu_idx = PredictMu.pairs_w_mu_idx
+    File model = TrainModel.trained_model
+    File? model_weights = TrainModel.weights_txt
     File? input_diagnostics = MergeTrainInputDiagnostics.tarball
     File? performance_diagnostics = MergePerformanceDiagnostics.tarball
+    File? model_diagnostics = MergeModelDiagnostics.tarball
     File? mu_diagnostics = MergeMuDiagnostics.tarball
   }
 }
@@ -373,6 +399,7 @@ task TrainModel {
     File contigs_fai
     File athena_training_config
     Array[Int] contig_pair_counts
+    Boolean output_weights
     String prefix
 
     String athena_docker
@@ -404,7 +431,11 @@ task TrainModel {
     > training_beds.tsv
 
     # Train model
-    athena_cmd="athena mu-train --training-data training_beds.tsv"
+    athena_options=""
+    if [[ "~{output_weights}" = "true" ]]; then
+      athena_options="$athena_options --weights-outfile ~{prefix}.~{model}.model_weights.txt"
+    fi
+    athena_cmd="athena mu-train $athena_options--training-data training_beds.tsv"
     athena_cmd="$athena_cmd --config ~{athena_training_config}"
     athena_cmd="$athena_cmd --n-gw-pairs $n_gw_pairs"
     athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
@@ -419,6 +450,7 @@ task TrainModel {
     File trained_model = "~{prefix}.~{model}.trained.pt"
     File stats_tsv = "~{prefix}.~{model}.training_stats.tsv"
     File calibration_tsv = "~{prefix}.~{model}.calibration.tsv.gz"
+    File? weights_txt = "~{prefix}.~{model}.model_weights.txt"
   }
   
   runtime {
