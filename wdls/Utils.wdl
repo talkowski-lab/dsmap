@@ -243,6 +243,7 @@ task PlotFeatureImportance {
 
     # Plot feature importance matrix
     athena_cmd="athena feature-importance ~{pca_model} ~{prefix} $athena_options"
+    athena_cmd="$athena_cmd --sort-features --sort-pcs"
     echo -e "Now plotting feature importance using command:\n$athena_cmd"
     eval $athena_cmd
   }
