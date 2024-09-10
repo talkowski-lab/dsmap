@@ -406,7 +406,7 @@ task PlotMuHist {
   >>>
 
   output {
-    File mu_hist = "~{out_prefix}.mutation_rate.hist.pdf"
+    File mu_hist = "~{out_prefix}.mu.hist.pdf"
   }
 
   runtime {

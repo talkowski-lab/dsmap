@@ -627,7 +627,7 @@ task PlotMuPairs {
   >>>
 
   output {
-    File mu_dist = "~{out_prefix}.mutation_rate." + (if distance then "size" else "heatmap") + ".pdf"
+    File mu_dist = "~{out_prefix}.mu." + (if distance then "size" else "heatmap") + ".pdf"
   }
 
   runtime {
