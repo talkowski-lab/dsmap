@@ -37,6 +37,7 @@ workflow TrainMuModel {
     # Diagnostics options
     Boolean run_diagnostics = true
     File pca_model
+    Array[Int] min_bigwig_binpair_sizes = [0, 100000]
 
     # Dockers
     String athena_docker
@@ -229,42 +230,48 @@ workflow TrainMuModel {
 
     # Generate bigWig tracks for UCSC browser summarizing mu over all bin pairs at each bin
     # Note: Aggregation functions are limited to those accepted by bedtools groupby
-    call AggregateBinMu as AggregateBinMuMedian {
-      input:
-        contigs=contigs,
-        contig_mus=PredictMu.pairs_w_mu,
-        contig_sizes=contig_sizes,
-        bin_size=InferBinSize.bin_size,
-        agg="median",
-        out_prefix="~{prefix}.~{cnv}",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_diagnostics
+    scatter (min_binpair_size in min_bigwig_binpair_sizes) {
+      call AggregateBinMu as AggregateBinMuMedian {
+        input:
+          contigs=contigs,
+          contig_mus=PredictMu.pairs_w_mu,
+          contig_sizes=contig_sizes,
+          bin_size=InferBinSize.bin_size,
+          min_binpair_size=min_binpair_size,
+          agg="median",
+          out_prefix="~{prefix}.~{cnv}.min~{min_binpair_size}.median",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call AggregateBinMu as AggregateBinMuMin {
+        input:
+          contigs=contigs,
+          contig_mus=PredictMu.pairs_w_mu,
+          contig_sizes=contig_sizes,
+          bin_size=InferBinSize.bin_size,
+          min_binpair_size=min_binpair_size,
+          agg="min",
+          out_prefix="~{prefix}.~{cnv}.min~{min_binpair_size}.min",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call AggregateBinMu as AggregateBinMuMax {
+        input:
+          contigs=contigs,
+          contig_mus=PredictMu.pairs_w_mu,
+          contig_sizes=contig_sizes,
+          bin_size=InferBinSize.bin_size,
+          min_binpair_size=min_binpair_size,
+          agg="max",
+          out_prefix="~{prefix}.~{cnv}.min~{min_binpair_size}.max",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
     }
-    call AggregateBinMu as AggregateBinMuMin {
-      input:
-        contigs=contigs,
-        contig_mus=PredictMu.pairs_w_mu,
-        contig_sizes=contig_sizes,
-        bin_size=InferBinSize.bin_size,
-        agg="min",
-        out_prefix="~{prefix}.~{cnv}",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_diagnostics
-    }
-    call AggregateBinMu as AggregateBinMuMax {
-      input:
-        contigs=contigs,
-        contig_mus=PredictMu.pairs_w_mu,
-        contig_sizes=contig_sizes,
-        bin_size=InferBinSize.bin_size,
-        agg="max",
-        out_prefix="~{prefix}.~{cnv}",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_diagnostics
-    }
+    
 
     # Plot importance of raw features weighted by PC weights in model
-    if (model_is_linear) {
+    if ( model_is_linear ) {
       call Utils.PlotFeatureImportance as PlotFeatureImportance {
         input:
           pca_model=pca_model,
@@ -305,8 +312,8 @@ workflow TrainMuModel {
     call Utils.MakeTarball as MergeMuDiagnostics {
       input:
         files_to_tar=flatten([[PlotMuPairsHistAll.mu_hist, PlotMuPairsBySizeAll.mu_dist],
-                              [AggregateBinMuMedian.mu_agg_bw, AggregateBinMuMin.mu_agg_bw,
-                              AggregateBinMuMax.mu_agg_bw],
+                              AggregateBinMuMedian.mu_agg_bw, AggregateBinMuMin.mu_agg_bw,
+                              AggregateBinMuMax.mu_agg_bw,
                               PlotMuPairsHistChrom.mu_hist, PlotMuPairsHeatmapChrom.mu_dist,
                               PlotMuPairsBySizeChrom.mu_dist]),
         tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.mu_diagnostics",
@@ -642,13 +649,14 @@ task PlotMuPairs {
 }
 
 
-# Generate bigWig file summarizing mu over all bin pairs at each bin
+# Generate bigWig file summarizing mu over bin pairs with each bin
 task AggregateBinMu {
   input {
     Array[String] contigs
     Array[File] contig_mus
     File contig_sizes
     Int bin_size
+    Int min_binpair_size = 0
     String agg = "median"
     String out_prefix
 
@@ -675,18 +683,25 @@ task AggregateBinMu {
 
     # Aggregate bin-level mu information for each contig
     while read contig mu_tsv; do
-      # Remove rows where mu is infinite
+      # Remove rows where mu is infinite and
+      # where binpair size is smaller than minimum
       # TODO: Determine and eliminate source of infinite mus
-      zcat ${mu_tsv} | grep -v "inf" | bgzip -c > mu.tsv
+      zcat ${mu_tsv} | grep -v "inf" > mu_prep.tsv
+      if [ ~{min_binpair_size} -gt ~{bin_size} ]; then
+        awk -v OFS="\t" '($3 - $2) >= ~{min_binpair_size} { print $0 }' mu_prep.tsv \
+        | bgzip -c > mu.tsv.gz
+      else
+        bgzip -c mu_prep.tsv > mu.tsv.gz
+      fi
 
       (echo "variableStep chrom=${contig} span=~{bin_size}" && \
         ({
-          bedtools groupby -i mu.tsv -g 1,2 -c 4 -o ~{agg} ;
-          bedtools groupby -i mu.tsv -g 1,3 -c 4 -o ~{agg} ;
+          bedtools groupby -i mu.tsv.gz -g 1,2 -c 4 -o ~{agg} ;
+          bedtools groupby -i mu.tsv.gz -g 1,3 -c 4 -o ~{agg} ;
           } \
           | sort -Vk1,1 -k2,2n \
           | bedtools groupby -g 1,2 -c 3 -o ~{agg} \
-          | awk -v OFS="\t" '{print $2+1,$3}' \
+          | awk -v OFS="\t" '{ print $2 + 1, $3}' \
         ) \
       ) \
     done < <(paste ~{write_lines(contigs)} ~{write_lines(contig_mus)}) \
@@ -695,11 +710,11 @@ task AggregateBinMu {
     # Convert to bigWig
     wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/wigToBigWig
     chmod a+x wigToBigWig
-    ./wigToBigWig mu_agg.wig ~{contig_sizes} ~{out_prefix}.mu.~{agg}.bw
+    ./wigToBigWig mu_agg.wig ~{contig_sizes} ~{out_prefix}.mu.bw
   >>>
 
   output {
-    File mu_agg_bw = "~{out_prefix}.mu.~{agg}.bw"
+    File mu_agg_bw = "~{out_prefix}.mu.bw"
   }
 
   runtime {
