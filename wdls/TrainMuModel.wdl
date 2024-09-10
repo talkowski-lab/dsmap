@@ -442,7 +442,7 @@ task TrainModel {
     if [[ "~{output_weights}" = "true" ]]; then
       athena_options="$athena_options --weights-outfile ~{prefix}.~{model}.model_weights.txt"
     fi
-    athena_cmd="athena mu-train $athena_options--training-data training_beds.tsv"
+    athena_cmd="athena mu-train $athena_options --training-data training_beds.tsv"
     athena_cmd="$athena_cmd --config ~{athena_training_config}"
     athena_cmd="$athena_cmd --n-gw-pairs $n_gw_pairs"
     athena_cmd="$athena_cmd --model-outfile ~{prefix}.~{model}.trained.pt"
