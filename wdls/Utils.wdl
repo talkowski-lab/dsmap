@@ -234,7 +234,7 @@ task PlotFeatureImportance {
     if [ "~{norm_variance}" == "true" ]; then
       athena_options="$athena_options --norm-variance"
     fi
-    [ "~{abs}" == "true" ]; then
+    if [ "~{abs}" == "true" ]; then
       athena_options="$athena_options --abs"
     fi
     if [ "~{defined(pc_weights)}" == "true" ]; then
