@@ -270,24 +270,24 @@ workflow TrainMuModel {
     }
     
 
-    # Plot importance of raw features weighted by PC weights in model
-    if ( model_is_linear ) {
-      call Utils.PlotFeatureImportance as PlotFeatureImportance {
-        input:
-          pca_model=pca_model,
-          pc_weights=TrainModel.weights_txt,
-          prefix="~{prefix}.~{model}.weights",
-          athena_docker=athena_docker,
-          runtime_attr_override=runtime_attr_diagnostics
-      }
-      call Utils.MakeTarball as MergeModelDiagnostics {
-        input:
-          files_to_tar=[PlotFeatureImportance.importance_dist],
-          tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.model_diagnostics",
-          athena_docker=athena_docker,
-          runtime_attr_override=runtime_attr_diagnostics
-      }
-    }
+    # # Plot importance of raw features weighted by PC weights in model
+    # if ( model_is_linear ) {
+    #   call Utils.PlotFeatureImportance as PlotFeatureImportance {
+    #     input:
+    #       pca_model=pca_model,
+    #       pc_weights=TrainModel.weights_txt,
+    #       prefix="~{prefix}.~{model}.weights",
+    #       athena_docker=athena_docker,
+    #       runtime_attr_override=runtime_attr_diagnostics
+    #   }
+    #   call Utils.MakeTarball as MergeModelDiagnostics {
+    #     input:
+    #       files_to_tar=[PlotFeatureImportance.importance_dist],
+    #       tarball_prefix="~{prefix}.~{cnv}.TrainMuModel.model_diagnostics",
+    #       athena_docker=athena_docker,
+    #       runtime_attr_override=runtime_attr_diagnostics
+    #   }
+    # }
 
     # Tar all diagnostics for convenience
     call Utils.MakeTarball as MergeTrainInputDiagnostics {
@@ -329,7 +329,7 @@ workflow TrainMuModel {
     File? model_weights = TrainModel.weights_txt
     File? input_diagnostics = MergeTrainInputDiagnostics.tarball
     File? performance_diagnostics = MergePerformanceDiagnostics.tarball
-    File? model_diagnostics = MergeModelDiagnostics.tarball
+    # File? model_diagnostics = MergeModelDiagnostics.tarball
     File? mu_diagnostics = MergeMuDiagnostics.tarball
   }
 }
