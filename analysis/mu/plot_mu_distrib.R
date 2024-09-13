@@ -166,7 +166,7 @@ mu <- load.mu.tsv(mu.in)
 binsize <- infer.bin.size(mu)
 
 # Plot histogram of mutation rates
-pdf(paste(out.prefix, "mutation_rate.hist.pdf", sep = "."),
+pdf(paste(out.prefix, "mu.hist.pdf", sep = "."),
   height = 3, width = 4.5
 )
 mu.hist(mu,

@@ -312,7 +312,7 @@ if (distance) {
   dev.off()
 } else {
   # Plot mutation rate heatmap along chromosome
-  pdf(paste(out.prefix, "mutation_rate.heatmap.pdf", sep = "."),
+  pdf(paste(out.prefix, "mu.heatmap.pdf", sep = "."),
     height = 3, width = 40
   )
   mu.heatmap(mu,
