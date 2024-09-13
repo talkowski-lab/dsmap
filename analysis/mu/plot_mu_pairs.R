@@ -52,10 +52,13 @@ mu.distance <- function(mu, binsize, cnv = NULL,
   # Set plot parameters
   if (cnv == "DEL") {
     pal <- "Reds"
+    pt.color <- get(paste(cnv, "colors", sep = "."))$main
   } else if (cnv == "DUP") {
     pal <- "Blues"
+    pt.color <- get(paste(cnv, "colors", sep = "."))$main
   } else {
     pal <- "Oranges"
+    pt.color <- browns$main
   }
   x.axis.title <- "Pair distance"
   y.axis.title <- paste(ifelse(is.null(cnv), "CNV", cnv),
@@ -67,12 +70,21 @@ mu.distance <- function(mu, binsize, cnv = NULL,
   mu$size <- mu$end - mu$start - binsize
   sizes <- seq(0, max(mu$size), binsize)
 
-  # Prep plot area
+  # Compute median mu value per bin pair size
+  mu.size.medians <- sapply(sizes, function(s) median(mu[mu$size == s, "mu"]))
+
+  # Create one panel for median mu value per bin pair size
+  # and one for matrix of mus
+  layout(matrix(1:2), heights = c(2, 1))
+
+  # Prep plot area for matrix
+  # 1/2 buffer added to axis limits to accommodate each axis tick being
+  # in the middle of a drawn row/column
   ylims <- c(floor(min(mu$mu)), ceiling(max(mu$mu)))
   prep.plot.area(
     c(min(mu$size) - binsize / 2, max(mu$size) + binsize / 2),
     ylims,
-    parmar = c(2.5, 2.8, 1.2, 1)
+    parmar = c(0.5, 2.8, 1.2, 1)
   )
 
   # For each bin pair size, compute density distribution of mu in log space
@@ -91,6 +103,58 @@ mu.distance <- function(mu, binsize, cnv = NULL,
     col = hcl.colors(palette = pal, rev = TRUE, n = 50)
   )
 
+  # Add Y axis
+  axis(2, at = c(-10e10, 10e10), col = offblack, tcl = 0)
+  if (min(mu$mu) >= min(log10(logscale.major))) {
+    y.ax.at <- log10(logscale.major)
+    axis(2, at = log10(logscale.minor), tcl = -0.1, col = offblack, labels = NA)
+  } else {
+    y.ax.at <- floor(min(mu$mu)):log10(max(logscale.major))
+  }
+  axis(2, at = y.ax.at, tcl = -0.2, col = offblack, labels = NA)
+  sapply(y.ax.at, function(y) {
+    axis(2,
+      at = y, tick = F, line = -0.65, labels = bquote(10^.(y)),
+      cex.axis = 0.5, las = 2
+    )
+  })
+  mtext(2, line = 1.25, at = -20, text = y.axis.title)
+
+  # Add X axis
+  axis(1, at = c(-10e10, 10e10), col = offblack, tcl = 0)
+
+  # Add title
+  mtext(3, font = 2, text = title, xpd = T)
+
+  # Prep plot area for medians
+  prep.plot.area(
+    c(min(mu$size) - binsize / 2, max(mu$size) + binsize / 2),
+    c(floor(min(mu.size.medians)), ceiling(max(mu.size.medians))),
+    parmar = c(2.5, 2.8, 0.8, 1)
+  )
+
+  # Plot median mu per bin pair size
+  points(sizes, mu.size.medians, pch = 20, col = pt.color)
+
+  # Add Y axis
+  axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
+  if (min(mu.size.medians) >= min(log10(logscale.major))) {
+    y.ax.at <- log10(logscale.major)
+    axis(2, at = log10(logscale.minor), tcl = -0.1, col = offblack, labels = NA)
+  } else {
+    y.ax.at <- floor(min(mu.size.medians)):log10(max(logscale.major))
+  }
+  axis(2, at = y.ax.at, tcl = -0.2, col = offblack, labels = NA)
+  sapply(y.ax.at, function(y) {
+    axis(2,
+      at = y, tick = F, line = -0.65, labels = bquote(10^.(y)),
+      cex.axis = 0.5, las = 2
+    )
+  })
+
+  # Add panel title
+  mtext(3, font = 2, text = "Median by pair distance", xpd = T)
+
   # Add X axis
   x.ax.at <- axTicks(1)
   if (max(x.ax.at) > 1000000) {
@@ -104,33 +168,13 @@ mu.distance <- function(mu, binsize, cnv = NULL,
     units <- NULL
   }
   x.ax.labels <- prettyNum(x.ax.at / denom, big.mark = ",")
-  axis(1, at = c(-10e10, 10e10), col = offblack, tck = 0)
-  axis(1, at = x.ax.at, tck = -0.025, col = offblack, labels = NA)
+  axis(1, at = c(-10e10, 10e10), col = offblack, tcl = 0)
+  axis(1, at = x.ax.at, tcl = -0.2, col = offblack, labels = NA)
   axis(1, at = x.ax.at, tick = F, line = -0.65, labels = x.ax.labels)
   if (!is.null(units)) {
     x.axis.title <- paste(x.axis.title, " (", units, ")", sep = "")
   }
   mtext(1, line = 1.25, text = x.axis.title)
-
-  # Add Y axis
-  axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
-  if (min(mu$mu) >= min(log10(logscale.major))) {
-    y.ax.at <- log10(logscale.major)
-    axis(2, at = log10(logscale.minor), tck = -0.0125, col = offblack, labels = NA)
-  } else {
-    y.ax.at <- floor(min(mu$mu)):log10(max(logscale.major))
-  }
-  axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
-  sapply(y.ax.at, function(y) {
-    axis(2,
-      at = y, tick = F, line = -0.65, labels = bquote(10^.(y)),
-      cex.axis = 0.5, las = 2
-    )
-  })
-  mtext(2, line = 1.25, text = y.axis.title)
-
-  # Add title
-  mtext(3, font = 2, text = title, xpd = T)
 }
 
 # Diagonal heatmap of mutation rate in each bin pair along chromosome
