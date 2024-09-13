@@ -48,7 +48,7 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 ######################
 # Mutation rate by bin pair distance
 mu.distance <- function(mu, binsize, cnv = NULL,
-                        title = "Mutation rate density by pair distance") {
+                        title = "Mutation rate dist by pair distance") {
   # Set plot parameters
   if (cnv == "DEL") {
     pal <- "Reds"
@@ -267,7 +267,7 @@ option_list <- list(
     type = "character", default = NULL
   ),
   make_option(c("--title"),
-    help = "Custom title [default 'Mutation rate' or 'Mutation rate density by pair distance']",
+    help = "Custom title [default 'Mutation rate' or 'Mutation rate dist by pair distance']",
     type = "character", default = NULL
   )
 )
@@ -302,12 +302,12 @@ binsize <- infer.bin.size(mu)
 
 if (distance) {
   # Plot mutation rate by bin pair distance
-  pdf(paste(out.prefix, "mutation_rate.size.pdf", sep = "."),
+  pdf(paste(out.prefix, "mu.size.pdf", sep = "."),
     height = 3, width = 4.5
   )
   mu.distance(mu,
     binsize = binsize, cnv = cnv,
-    title = ifelse(is.null(title), "Mutation rate density by pair distance", title)
+    title = ifelse(is.null(title), "Mutation rate dist by pair distance", title)
   )
   dev.off()
 } else {

@@ -180,7 +180,7 @@ workflow TrainMuModel {
         input:
           mu_tsv=contig_mu.right,
           cnv=cnv,
-          title="~{contig_mu.left} ~{cnv} mutation rate density by pair distance",
+          title="~{contig_mu.left} ~{cnv} mutation rate dist by pair distance",
           out_prefix="~{prefix}.~{cnv}.~{contig_mu.left}",
           distance=true,
           dsmap_r_docker=dsmap_r_docker,
@@ -214,7 +214,7 @@ workflow TrainMuModel {
       input:
         mu_tsv=MergeMus.merged_bed,
         cnv=cnv,
-        title="~{cnv} mutation rate density by pair distance",
+        title="~{cnv} mutation rate dist by pair distance",
         out_prefix="~{prefix}.~{cnv}",
         distance=true,
         dsmap_r_docker=dsmap_r_docker,
