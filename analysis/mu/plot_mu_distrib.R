@@ -46,8 +46,8 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 # Plotting functions #
 ######################
 # Histogram of mutation rates
-mu.hist <- function(mu, cnv = NULL, x.axis.title = "CNVs per allele per generation",
-                    y.axis.title = "Loci", title = "Mutation rate") {
+plot.mu.hist <- function(mu, cnv = NULL, x.axis.title = "CNVs per allele per generation",
+                         y.axis.title = "Loci", title = "Mutation rate") {
   # Set plot parameters
   if (cnv %in% c("DEL", "DUP", "CNV")) {
     bar.color <- get(paste(cnv, "colors", sep = "."))$main
@@ -169,7 +169,7 @@ binsize <- infer.bin.size(mu)
 pdf(paste(out.prefix, "mu.hist.pdf", sep = "."),
   height = 3, width = 4.5
 )
-mu.hist(mu,
+plot.mu.hist(mu,
   cnv = cnv, x.axis.title = x.title,
   y.axis.title = y.title, title = title
 )

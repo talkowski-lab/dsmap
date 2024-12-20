@@ -129,7 +129,7 @@ plot.cnv.oe <- function(dat, cnv, segment.name = "Segment") {
 }
 
 # Plot segment DEL vs. DUP O/E quantiles
-plot.del.dup.quantile <- function(dat, cor, segment.name) {
+plot.del.dup.quantile <- function(dat, cor.in, segment.name) {
     par(mar = c(3.5, 3.5, 2.5, 1.5))
     plot(
         dat$oe.DEL.quantile, dat$oe.DUP.quantile,
@@ -140,9 +140,9 @@ plot.del.dup.quantile <- function(dat, cor, segment.name) {
     mtext(3, line = 1.5, text = paste(segment.name, "DEL vs. DUP O/E"), cex = 1.2, font = 2)
     mtext(3, line = 0.25, text = paste(
         "Spearman rho =",
-        round(cor[["estimate"]], 3),
+        round(cor.in[["estimate"]], 3),
         "; p =",
-        formatC(cor[["p"]], format = "e", digits = 1)
+        formatC(cor.in[["p"]], format = "e", digits = 1)
     ))
     mtext(1, line = 2.5, text = paste("DEL O/E quantile"))
     mtext(2, line = 2.5, text = "DUP O/E quantile")

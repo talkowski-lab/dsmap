@@ -47,7 +47,7 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 # Plotting functions #
 ######################
 # Mutation rate by bin pair distance
-mu.distance <- function(mu, binsize, cnv = NULL,
+plot.mu.distance <- function(mu, binsize, cnv = NULL,
                         title = "Mutation rate dist by pair distance") {
   # Set plot parameters
   if (cnv == "DEL") {
@@ -349,7 +349,7 @@ if (distance) {
   pdf(paste(out.prefix, "mu.size.pdf", sep = "."),
     height = 3, width = 4.5
   )
-  mu.distance(mu,
+  plot.mu.distance(mu,
     binsize = binsize, cnv = cnv,
     title = ifelse(is.null(title), "Mutation rate dist by pair distance", title)
   )
