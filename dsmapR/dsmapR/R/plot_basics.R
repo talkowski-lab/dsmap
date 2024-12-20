@@ -58,7 +58,8 @@ rotate.points <- function(coords, angle, x.origin=0, y.origin=0){
     new.angle <- angle * (pi / 180)
 
     # Infer current angle from (x - x.o, y - y.o)
-    old.angle <- atan2(x - x.origin, y - y.origin)
+    # old.angle <- atan2(x - x.origin, y - y.origin)
+    old.angle <- atan2(y - y.origin, x - x.origin)
 
     # Theta = old.angle + new.angle
     theta <- old.angle + new.angle
@@ -120,8 +121,8 @@ plot.diag.heat <- function(mat, orient="up", gridlines=TRUE, gridline.lwd=0.25,
                                 "y"=c(y-1, y-1, y, y))
       rotated.coords <- rotate.points(rect.coords, angle=-45)
       polygon(x=rotated.coords$x, y=rotated.coords$y,
-              border=heat.pal[val.scaled[y, x]],
-              col=heat.pal[val.scaled[y, x]],
+              border=heat.pal[val.scaled[y, x]], # TODO: Check these still hold after fixing rotate.points
+              col=heat.pal[val.scaled[y, x]], # TODO: Check
               lwd=gridline.lwd)
     })
   })
@@ -132,10 +133,10 @@ plot.diag.heat <- function(mat, orient="up", gridlines=TRUE, gridline.lwd=0.25,
       gridline.coords <- rotate.points(data.frame("x"=c(i, i, 0, n.rows),
                                                   "y"=c(0, n.rows, i, i)),
                                        angle=-45)
-      segments(x0=gridline.coords$x[c(1, 3)],
-               x1=gridline.coords$x[c(2, 4)],
-               y0=gridline.coords$y[c(1, 3)],
-               y1=gridline.coords$y[c(2, 4)],
+      segments(x0=gridline.coords$x[c(1, 3)], # TODO: Check
+               x1=gridline.coords$x[c(2, 4)], # TODO: Check
+               y0=gridline.coords$y[c(1, 3)], # TODO: Check
+               y1=gridline.coords$y[c(2, 4)], # TODO: Check
                col=offwhite, lwd=gridline.lwd)
     })
   }
