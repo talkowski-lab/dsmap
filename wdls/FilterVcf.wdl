@@ -74,16 +74,16 @@ workflow FilterVcf {
     # Compute stats on CNV size and spacing in DEL and DUP VCFs
     call GetVcfStats as GetDelStats {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
+        vcf=FilterDels.vcf_out,
+        vcf_idx=FilterDels.vcf_idx_out,
         prefix=basename(vcf, ".vcf.gz") + ".filtered.DEL",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
     }
     call GetVcfStats as GetDupStats {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
+        vcf=FilterDups.vcf_out,
+        vcf_idx=FilterDups.vcf_idx_out,
         prefix=basename(vcf, ".vcf.gz") + ".filtered.DUP",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
