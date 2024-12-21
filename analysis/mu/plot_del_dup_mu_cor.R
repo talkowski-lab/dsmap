@@ -4,7 +4,7 @@
 #    DSMap Project    #
 #######################
 
-# Copyright (c) 2022-Present Ryan L. Collins and the Talkowski Laboratory
+# Copyright (c) 2024-Present Lily Wang and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
 # Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
@@ -95,7 +95,7 @@ compute.cor <- function(x, y) {
 # Plotting functions #
 ######################
 # DEL vs. DUP mu quantile heatmap
-plot.quantile.heatmap <- function(mu.scores, sum.stats, cor.in, n.quantiles = 100, 
+plot.quantile.heatmap <- function(mu.scores, sum.stats, cor.in, n.quantiles = 100,
                                   title.in = "Bin-Pair DEL vs. DUP Mu") {
   quantiles <- seq(1, n.quantiles)
   x.axis.title <- "DEL Mu Quantile"
