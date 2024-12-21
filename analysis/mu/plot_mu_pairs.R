@@ -6,7 +6,7 @@
 
 # Copyright (c) 2022-Present Ryan L. Collins and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+# Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
 # Plot distribution of mutation rate predictions in bin pairs
 
@@ -48,7 +48,7 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 ######################
 # Mutation rate by bin pair distance
 plot.mu.distance <- function(mu, binsize, cnv = NULL,
-                        title = "Mutation rate dist by pair distance") {
+                             title = "Mutation rate dist by pair distance") {
   # Set plot parameters
   if (cnv == "DEL") {
     pal <- "Reds"

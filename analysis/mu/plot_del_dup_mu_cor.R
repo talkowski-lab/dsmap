@@ -6,7 +6,7 @@
 
 # Copyright (c) 2022-Present Ryan L. Collins and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+# Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
 # Plot correlation of DEL and DUP mutation rate predictions in bin pairs
 

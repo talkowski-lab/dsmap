@@ -6,7 +6,7 @@
 
 # Copyright (c) 2022-Present Ryan L. Collins and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+# Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
 # 1. Plot gene DEL and DUP DSMap observed/expected values (O/Es) against a constraint metric
 # 2. Write out genes ranked by discordance of DSMap O/Es vs. other constraint metrics

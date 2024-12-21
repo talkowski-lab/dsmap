@@ -6,7 +6,7 @@
 
 # Copyright (c) 2023-Present Ryan L. Collins and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rcollins@broadinstitute.org>
+# Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
 # DSMap hg38 demonstration project
 # gnomAD-SV v3.0 

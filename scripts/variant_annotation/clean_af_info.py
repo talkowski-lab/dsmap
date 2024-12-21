@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2021 Ryan Collins <rlcollins@g.harvard.edu>
+# Copyright © 2021 Ryan Collins <lily_wang@hms.harvard.edu>
 # Distributed under terms of the MIT license.
 
 """
