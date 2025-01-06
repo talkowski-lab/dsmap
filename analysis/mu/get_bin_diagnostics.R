@@ -4,11 +4,11 @@
 #    DSMap Project    #
 #######################
 
-# Copyright (c) 2021-Present Ryan L. Collins and the Talkowski Laboratory
+# Copyright (c) 2024-Present Lily Wang and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
 # Contact: Lily Wang <lily_wang@hms.harvard.edu>
 
-# Collect diagnostics for probabilities of observed CNVs in bin-pairs
+# Collect diagnostics for probabilities of observed CNVs in genome bins
 
 # TODO: Handle quantitative counts that are not binary/probabilities
 
@@ -29,47 +29,30 @@ dsmapR::load.constants("colors")
 ##################
 # Data functions #
 ##################
-# Summarize distributions of pairs with CNV probabilities
+# Summarize distributions of bins with CNV probabilities
 # for an input BED loaded with dsmapR::load.bins()
-summarize.pairs <- function(pairs) {
-  contigs <- unique(pairs$coords[, 1])
-  binsize <- infer.bin.size(pairs$coords)
-  sizes <- pairs$coords[, 3] - pairs$coords[, 2] - binsize
-  has_sv <- pairs$feats[, 1] >= 0.5
+summarize.bins <- function(bins) {
+  contigs <- unique(bins$coords[, 1])
+  has_sv <- bins$feats[, 1] >= 0.5
 
   # Compute dataframe of counts per contig based on SV overlap
-  df.by.contig <- cbind(contigs, as.data.frame(
+  df <- cbind(contigs, as.data.frame(
     do.call("rbind", lapply(contigs, function(contig) {
       c(
-        length(which(pairs$coords[, 1] == contig & !(has_sv))),
-        length(which(pairs$coords[, 1] == contig & has_sv))
+        length(which(bins$coords[, 1] == contig & !(has_sv))),
+        length(which(bins$coords[, 1] == contig & has_sv))
       )
     }))
   ))
-  colnames(df.by.contig) <- c("contig", "no_sv", "has_sv")
-  df.by.contig$pct_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
-
-  # Compute dataframe of counts by bin size
-  size.range <- seq(0, max(sizes), by = binsize)
-  df.by.size <- cbind(size.range / 1000, as.data.frame(
-    do.call("rbind", lapply(size.range, function(size) {
-      c(
-        length(which(sizes == size & !(has_sv))),
-        length(which(sizes == size & has_sv))
-      )
-    }))
-  ))
-  colnames(df.by.size) <- c("pair_distance_kb", "no_sv", "has_sv")
-  df.by.size$pct_has_sv <- df.by.size$has_sv / (df.by.size$has_sv + df.by.size$no_sv)
-
-  return(list("contig" = df.by.contig, "size" = df.by.size))
+  colnames(df) <- c("contig", "no_sv", "has_sv")
+  df$pct_has_sv <- df$has_sv / (df$has_sv + df$no_sv)
 }
 
 
 ######################
 # Plotting functions #
 ######################
-# Barplots of bin-pair positive vs. negative counts or positive percentage
+# Barplots of bin positive vs. negative counts or positive percentage
 # Optionally colored by CNV type
 plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA,
                         label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
@@ -160,9 +143,9 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
   if (pct) {
-    y.text <- paste("Proportion bin-pairs with", cnv)
+    y.text <- paste("Proportion bins with", cnv)
   } else {
-    y.text <- "Bin-pairs"
+    y.text <- "Bins"
     if (!is.null(units)) {
       y.text <- paste(y.text, " (", units, ")", sep = "")
     }
@@ -194,7 +177,7 @@ option_list <- list(
 )
 
 # Get command-line arguments & options
-arg_list <- c("pairs.bed", "out.prefix")
+arg_list <- c("bins.bed", "out.prefix")
 args <- parse_args(
   OptionParser(
     usage = paste("%prog", paste0(arg_list, collapse = " ")),
@@ -215,27 +198,22 @@ if (length(args$args) != length(arg_list)) {
 }
 
 # Writes args & opts to vars
-pairs.in <- args$args[1]
+bins.in <- args$args[1]
 out.prefix <- args$args[2]
 cnv <- opts$cnv
 
-# Load pairs
-pairs <- load.bins(pairs.in)
+# Load bins
+bins <- load.bins(bins.in)
 
 # Summarize counts
-dat <- summarize.pairs(pairs)
+dat <- summarize.bins(bins)
 
 # Merge counts per contig & write to output file
 write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = "."),
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
-# Merge counts by size & write to output file
-write.table(dat[["size"]], paste(out.prefix, "counts_vs_distance.tsv", sep = "."),
-  row.names = F, col.names = T, sep = "\t", quote = F
-)
-
-# Plot bin-pair counts and percentages with CNVs per contig
+# Plot bin counts and percentages with CNVs per contig
 for (count_type in c("counts", "pcts")) {
   pdf(
     paste(
@@ -246,30 +224,11 @@ for (count_type in c("counts", "pcts")) {
     height = 2.5, width = 4.25
   )
   plot.counts(
-    dat[["contig"]],
+    dat,
     pct = (count_type == "pcts"),
-    title = "Bin-pairs",
+    title = "Bins",
     x.axis.title = "Chromosome", cnv = cnv,
     label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
-  )
-  dev.off()
-}
-
-# Plot bin-pair counts and percentages with CNVs vs pair distance
-for (count_type in c("counts", "pcts")) {
-  pdf(
-    paste(
-      out.prefix, paste(count_type, "vs_distance", sep = "_"),
-      "pdf",
-      sep = "."
-    ),
-    height = 2.5, width = 4.25
-  )
-  plot.counts(
-    dat[["size"]],
-    pct = (count_type == "pcts"),
-    title = "Bin-pairs",
-    x.axis.title = "Pair distance (kb)", cnv = cnv
   )
   dev.off()
 }

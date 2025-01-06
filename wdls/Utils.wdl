@@ -485,3 +485,127 @@ task InferBinSize {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+# Collect diagnostic stats and plots for 1D bins
+task GetBinDiagnostics {
+  input {
+    Array[File] bin_counts
+    Boolean counts_are_probs
+    String cnv
+    String prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String merged_counts_bedfile = (
+    prefix + "." + cnv + ".bins" +
+    ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
+  )
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(bin_counts, "GB")),
+    boot_disk_gb: 20,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Merge bins and keep first four columns only
+    zcat ~{bin_counts[0]} | sed -n '1p' | cut -f1-4 > ~{merged_counts_bedfile}
+    zcat ~{sep=" " bin_counts} | grep -ve '^#' | cut -f1-4 >> ~{merged_counts_bedfile}
+    bgzip -f ~{merged_counts_bedfile}
+    tabix -f ~{merged_counts_bedfile}.gz
+
+    # Get diagnostics
+    mkdir -p outputs/
+    /opt/dsmap/analysis/mu/get_bin_diagnostics.R \
+      --cnv ~{cnv} ~{merged_counts_bedfile}.gz \
+      outputs/~{prefix}.~{cnv}.bins
+  >>>
+
+  output {
+    File merged_counts_bed = "~{merged_counts_bedfile}.gz"
+    File merged_counts_bed_idx = "~{merged_counts_bedfile}.gz.tbi"
+    Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.bins*")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Collect diagnostic stats and plots for 2D bin-pairs
+task GetPairDiagnostics {
+  input {
+    Array[File] pair_counts
+    Boolean counts_are_probs
+    String cnv
+    String prefix
+
+    String dsmap_r_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String merged_counts_bedfile = (
+    prefix + "." + cnv + ".pairs" +
+    ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
+  )
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10 + ceil(2 * size(pair_counts, "GB")),
+    boot_disk_gb: 20,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Merge pairs and keep first four columns only
+    zcat ~{pair_counts[0]} | sed -n '1p' | cut -f1-4 > ~{merged_counts_bedfile}
+    zcat ~{sep=" " pair_counts} | grep -ve '^#' | cut -f1-4 >> ~{merged_counts_bedfile}
+    bgzip -f ~{merged_counts_bedfile}
+    tabix -f ~{merged_counts_bedfile}.gz
+
+    # Get diagnostics
+    mkdir -p outputs/
+    /opt/dsmap/analysis/mu/get_pair_diagnostics.R \
+      --cnv ~{cnv} ~{merged_counts_bedfile}.gz \
+      outputs/~{prefix}.~{cnv}.pairs
+  >>>
+
+  output {
+    File merged_counts_bed = "~{merged_counts_bedfile}.gz"
+    File merged_counts_bed_idx = "~{merged_counts_bedfile}.gz.tbi"
+    Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.pairs*")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: dsmap_r_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
