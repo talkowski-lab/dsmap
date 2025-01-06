@@ -101,36 +101,51 @@ workflow BinAndAnnotateGenome {
 
   Array[Array[String]] contigs = read_tsv(CalcPairsPerChrom.pca_pairs)
 
+  Boolean bin_annotations_defined = (
+    defined(bin_annotations_list_localize) ||
+    defined(bin_annotations_list_remote) ||
+    defined(bin_annotations_list_ucsc)
+  )
+  Boolean pair_annotations_defined = (
+    defined(pair_annotations_list_localize) ||
+    defined(pair_annotations_list_remote) ||
+    defined(pair_annotations_list_ucsc)
+  )
+  # Prepare to run PCA-related steps if decompose_features specified and annotation inputs defined
+  Boolean run_pca = decompose_features && ( bin_annotations_defined || pair_annotations_defined )
+
   # Process each chromosome in parallel
   scatter ( contig in contigs ) {
 
-    # Step 2. Annotate 1D bins per contig
-    call AnnotateBinsSingleChrom.AnnotateBinsSingleChrom as AnnotateBins {
-      input:
-        bins=MakeBins.bins_bed,
-        bins_idx=MakeBins.bins_bed_idx,
-        bedtools_genome_file=MakeBins.bedtools_genome_file,
-        contig=contig[0],
-        shard_size=bins_per_shard,
-        prefix=prefix,
-        bin_annotations_list_localize=bin_annotations_list_localize,
-        bin_annotations_list_remote=bin_annotations_list_remote,
-        bin_annotations_list_ucsc=bin_annotations_list_ucsc,
-        ref_build=ref_build,
-        ref_fasta=ref_fasta,
-        snv_mutrates_tsv=snv_mutrates_tsv,
-        athena_docker=athena_docker,
-        athena_cloud_docker=athena_cloud_docker,
-        runtime_attr_chrom_shard=runtime_attr_chrom_shard,
-        runtime_attr_annotate_bins=runtime_attr_annotate_bins,
-        runtime_attr_merge_annotated_bins=runtime_attr_merge_annotated_bins
+    # Step 2. If any of 1D bin annotation inputs are defined, annotate 1D bins per contig
+    if ( bin_annotations_defined ) {
+      call AnnotateBinsSingleChrom.AnnotateBinsSingleChrom as AnnotateBins {
+        input:
+          bins=MakeBins.bins_bed,
+          bins_idx=MakeBins.bins_bed_idx,
+          bedtools_genome_file=MakeBins.bedtools_genome_file,
+          contig=contig[0],
+          shard_size=bins_per_shard,
+          prefix=prefix,
+          bin_annotations_list_localize=bin_annotations_list_localize,
+          bin_annotations_list_remote=bin_annotations_list_remote,
+          bin_annotations_list_ucsc=bin_annotations_list_ucsc,
+          ref_build=ref_build,
+          ref_fasta=ref_fasta,
+          snv_mutrates_tsv=snv_mutrates_tsv,
+          athena_docker=athena_docker,
+          athena_cloud_docker=athena_cloud_docker,
+          runtime_attr_chrom_shard=runtime_attr_chrom_shard,
+          runtime_attr_annotate_bins=runtime_attr_annotate_bins,
+          runtime_attr_merge_annotated_bins=runtime_attr_merge_annotated_bins
+      }
     }
 
-    # Step 3. Pair 2D bins and add 2D annotations
+    # Step 3. Pair 2D bins and add 2D bin-pair annotations if any are defined
     call MakeAndAnnotatePairsSingleChrom.MakeAndAnnotatePairsSingleChrom as MakeAndAnnotatePairs {
       input:
-        bins=AnnotateBins.annotated_bins,
-        bins_idx=AnnotateBins.annotated_bins_idx,
+        bins=select_first([AnnotateBins.annotated_bins, MakeBins.bins_bed]),
+        bins_idx=select_first([AnnotateBins.annotated_bins_idx, MakeBins.bins_bed_idx]),
         bedtools_genome_file=MakeBins.bedtools_genome_file,
         pair_exclusion_mask=pair_exclusion_mask,
         contig=contig[0],
@@ -142,8 +157,7 @@ workflow BinAndAnnotateGenome {
         pair_annotations_list_ucsc=pair_annotations_list_ucsc,
         ref_build=ref_build,
         ref_fasta=ref_fasta,
-        bin_size=bin_size,
-        sample_pairs_for_pca=decompose_features,
+        sample_pairs_for_pca=run_pca,
         pairs_to_sample_for_pca=contig[2],
         athena_docker=athena_docker,
         athena_cloud_docker=athena_cloud_docker,
@@ -151,12 +165,12 @@ workflow BinAndAnnotateGenome {
         runtime_attr_make_pairs=runtime_attr_make_pairs,
         runtime_attr_annotate_pairs=runtime_attr_annotate_pairs,
         runtime_attr_sample_pairs=runtime_attr_sample_pairs,
-        runtime_attr_merge_annotated_pairs=runtime_attr_merge_pairs
+        runtime_attr_merge_pairs=runtime_attr_merge_pairs
     }
   }
 
-  # Steps 4-5 are only necessary to run if decompose_features is specified
-  if ( decompose_features ) { 
+  # [Optional] Run steps 4-5 for PCA
+  if ( run_pca ) { 
 
     # Step 4.1. Merge subsampled pairs for PCA
     call Utils.MergeBEDs as MergePCAPairs {
@@ -194,7 +208,7 @@ workflow BinAndAnnotateGenome {
     }
 
     # Prior to Step 5, need to compose grouped inputs per chromosome
-    Array[Pair[File, File]] pairs_with_idxs = zip(MakeAndAnnotatePairs.annotated_pairs, MakeAndAnnotatePairs.annotated_pairs_idx)
+    Array[Pair[File, File]] pairs_with_idxs = zip(MakeAndAnnotatePairs.pairs, MakeAndAnnotatePairs.pairs_idx)
     Array[Pair[Pair[File, File], String]] inputs_for_decomp = zip(pairs_with_idxs, transpose(contigs)[0])
 
     # Step 5. Apply PCA transformation to 2D pairs (in parallel)
@@ -251,13 +265,15 @@ workflow BinAndAnnotateGenome {
           runtime_attr_override=runtime_attr_diagnostics
       }
     }
-
   }
 
   output {
 
-    Array[File] annotated_pairs = MakeAndAnnotatePairs.annotated_pairs
-    Array[File] annotated_pairs_idx = MakeAndAnnotatePairs.annotated_pairs_idx
+    File bins = MakeBins.bins_bed
+    File bins_idx = MakeBins.bins_bed_idx
+
+    Array[File] pairs = MakeAndAnnotatePairs.pairs
+    Array[File] pairs_idx = MakeAndAnnotatePairs.pairs_idx
 
     File pca_pairs = CalcPairsPerChrom.pca_pairs
 
@@ -443,5 +459,3 @@ task LearnPCA {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
-

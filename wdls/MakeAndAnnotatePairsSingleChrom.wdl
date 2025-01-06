@@ -33,7 +33,6 @@ workflow MakeAndAnnotatePairsSingleChrom {
     File? pair_annotations_list_ucsc
     String? ref_build
     String? ref_fasta
-    Int? bin_size
 
     Boolean sample_pairs_for_pca = true
     Int? pairs_to_sample_for_pca = 0
@@ -46,8 +45,15 @@ workflow MakeAndAnnotatePairsSingleChrom {
     RuntimeAttr? runtime_attr_make_pairs
     RuntimeAttr? runtime_attr_annotate_pairs
     RuntimeAttr? runtime_attr_sample_pairs
-    RuntimeAttr? runtime_attr_merge_annotated_pairs
+    RuntimeAttr? runtime_attr_merge_pairs
   }
+
+
+  Boolean pair_annotations_defined = (
+    defined(pair_annotations_list_localize) ||
+    defined(pair_annotations_list_remote) ||
+    defined(pair_annotations_list_ucsc)
+  )
 
   # Shard bins for parallelized pairing & annotation
   call Utils.SingleChromShard as ChromShard {
@@ -62,9 +68,9 @@ workflow MakeAndAnnotatePairsSingleChrom {
       runtime_attr_override=runtime_attr_chrom_shard
   }
 
-  # Scatter over sharded bins for pairing & annotation
+  # Scatter over sharded bins for pairing
   scatter ( shard in ChromShard.shards ) {
-    # Make pairs per shard
+    # Step 1. Make pairs per shard
     call MakePairs {
       input:
         query_bins=shard,
@@ -76,39 +82,46 @@ workflow MakeAndAnnotatePairsSingleChrom {
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_make_pairs
     }
+  }
 
-    # Annotate pairs per shard
-    call AnnotatePairs {
-      input:
-        pairs=MakePairs.pairs,
-        pairs_idx=MakePairs.pairs_idx,
-        bedtools_genome_file=bedtools_genome_file,
-        pair_annotations_list_localize=pair_annotations_list_localize,
-        pair_annotations_list_remote=pair_annotations_list_remote,
-        pair_annotations_list_ucsc=pair_annotations_list_ucsc,
-        ref_build=ref_build,
-        ref_fasta=ref_fasta,
-        athena_cloud_docker=athena_cloud_docker,
-        runtime_attr_override=runtime_attr_annotate_pairs
+  # Step 2. Annotate pairs per shard if there are defined 2D bin-pair annotation inputs
+  if ( pair_annotations_defined ) {
+
+    Array[Pair[File, File]] pairs_with_idxs = zip(MakePairs.pairs, MakePairs.pairs_idx)
+    
+    # Scatter over sharded bin pairs for annotation
+    scatter ( pairs in pairs_with_idxs ) {
+      call AnnotatePairs {
+        input:
+          pairs=pairs.left,
+          pairs_idx=pairs.right,
+          bedtools_genome_file=bedtools_genome_file,
+          pair_annotations_list_localize=pair_annotations_list_localize,
+          pair_annotations_list_remote=pair_annotations_list_remote,
+          pair_annotations_list_ucsc=pair_annotations_list_ucsc,
+          ref_build=ref_build,
+          ref_fasta=ref_fasta,
+          athena_cloud_docker=athena_cloud_docker,
+          runtime_attr_override=runtime_attr_annotate_pairs
+      }
     }
   }
 
-  # Merge all pairs
-  call Utils.MergeBEDs as MergeAnnotatedPairs {
+  # Step 3. Merge all pairs, either annotated or not
+  call Utils.MergeBEDs as MergePairs {
     input:
-      beds=AnnotatePairs.annotated_pairs,
-      prefix="~{prefix}.annotated_pairs.~{contig}",
+      beds=select_first([AnnotatePairs.annotated_pairs, MakePairs.pairs]),
+      prefix="~{prefix}.pairs.~{contig}", 
       athena_docker=athena_docker,
-      runtime_attr_override=runtime_attr_merge_annotated_pairs
+      runtime_attr_override=runtime_attr_merge_pairs
   }
 
-
-  # Sample N random pairs for feature PCA, if optioned
+  # [Optional] Step 4. If specified, sample N random pairs for feature PCA
   if ( sample_pairs_for_pca ) {
     call SamplePairs {
       input:
-        annotated_pairs=MergeAnnotatedPairs.merged_bed,
-        annotated_pairs_idx=MergeAnnotatedPairs.merged_bed_idx,
+        annotated_pairs=MergePairs.merged_bed,
+        annotated_pairs_idx=MergePairs.merged_bed_idx,
         sample_size=pairs_to_sample_for_pca,
         sampling_seed=sampling_seed,
         athena_docker=athena_docker,
@@ -119,8 +132,8 @@ workflow MakeAndAnnotatePairsSingleChrom {
 
   output {
 
-    File annotated_pairs = MergeAnnotatedPairs.merged_bed
-    File annotated_pairs_idx = MergeAnnotatedPairs.merged_bed_idx
+    File pairs = MergePairs.merged_bed
+    File pairs_idx = MergePairs.merged_bed_idx
 
     File? downsampled_pairs = SamplePairs.sampled_pairs
     File? downsampled_pairs_idx = SamplePairs.sampled_pairs_idx
@@ -204,7 +217,6 @@ task AnnotatePairs {
     File? pair_annotations_list_ucsc
     String? ref_build
     File? ref_fasta
-    Int? bin_size
 
     Int? query_slop = 1000
 
@@ -277,9 +289,6 @@ task AnnotatePairs {
     fi
     if [ "~{defined(ref_fasta)}" == "true" ]; then
       athena_options="$athena_options --fasta ~{default='empty.txt' ref_fasta}"
-    fi
-    if [ "~{defined(bin_size)}" == "true" ]; then
-      athena_options="$athena_options --binsize ~{default='' bin_size}"
     fi
 
     # Annotate pairs with athena
