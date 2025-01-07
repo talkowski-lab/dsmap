@@ -50,6 +50,7 @@ workflow BinAndAnnotateGenome {
     Boolean visualize_features_before_pca = false
     File? feature_transformations_tsv
     Int? pairs_for_pca
+    Int? pca_sampling_seed = 42
     Float? pca_min_variance
     Int? max_pcs
     Int? pairs_per_shard_apply_pca
@@ -158,6 +159,7 @@ workflow BinAndAnnotateGenome {
         ref_build=ref_build,
         ref_fasta=ref_fasta,
         sample_pairs_for_pca=run_pca,
+        sampling_seed=pca_sampling_seed,
         pairs_to_sample_for_pca=contig[2],
         athena_docker=athena_docker,
         athena_cloud_docker=athena_cloud_docker,
@@ -242,6 +244,9 @@ workflow BinAndAnnotateGenome {
       call Utils.PlotFeatureImportance as PlotFeatureImportance {
         input:
           pca_model=LearnPCA.pca_model,
+          abs=true,
+          norm_variance=false,
+          pc_weights=null,
           prefix="~{prefix}",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -249,8 +254,10 @@ workflow BinAndAnnotateGenome {
       call Utils.PlotFeatureImportance as PlotFeatureImportanceVarExplained {
         input:
           pca_model=LearnPCA.pca_model,
-          prefix="~{prefix}.variance_explained",
+          abs=true,
           norm_variance=true,
+          pc_weights=null,
+          prefix="~{prefix}.variance_explained",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }

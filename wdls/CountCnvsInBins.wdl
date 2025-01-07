@@ -46,6 +46,7 @@ workflow CountCnvsInBins {
     String dsmap_r_docker
 
     # Runtime overrides
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_count_bin_cnvs
     RuntimeAttr? runtime_attr_diagnostics
   }
@@ -60,14 +61,18 @@ workflow CountCnvsInBins {
     call SubsetVCFSingleChrom as SubsetDelSingleChrom {
       input:
         vcf=del_vcf,
-        contig=contig
+        contig=contig,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_subset_vcf
     }
 
     # Step 1b. Subset DUP VCF to chromosome
     call SubsetVCFSingleChrom as SubsetDupSingleChrom {
       input:
         vcf=dup_vcf,
-        contig=contig
+        contig=contig,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_subset_vcf
     }
 
     # Infer bins or pairs BED file path
