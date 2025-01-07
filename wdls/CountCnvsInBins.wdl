@@ -62,7 +62,7 @@ workflow CountCnvsInBins {
       input:
         vcf=del_vcf,
         contig=contig,
-        athena_docker=athena_docker,
+        athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr_subset_vcf
     }
 
@@ -71,7 +71,7 @@ workflow CountCnvsInBins {
       input:
         vcf=dup_vcf,
         contig=contig,
-        athena_docker=athena_docker,
+        athena_cloud_docker=athena_cloud_docker,
         runtime_attr_override=runtime_attr_subset_vcf
     }
 
@@ -217,7 +217,7 @@ task SubsetVCFSingleChrom {
     String vcf  # VCF passed as string to allow for remote tabixing without localizing entire VCF
     String contig
 
-    String athena_docker
+    String athena_cloud_docker
 
     RuntimeAttr? runtime_attr_override
   }
