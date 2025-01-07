@@ -246,7 +246,6 @@ workflow BinAndAnnotateGenome {
           pca_model=LearnPCA.pca_model,
           abs=true,
           norm_variance=false,
-          pc_weights=null,
           prefix="~{prefix}",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -256,7 +255,6 @@ workflow BinAndAnnotateGenome {
           pca_model=LearnPCA.pca_model,
           abs=true,
           norm_variance=true,
-          pc_weights=null,
           prefix="~{prefix}.variance_explained",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
