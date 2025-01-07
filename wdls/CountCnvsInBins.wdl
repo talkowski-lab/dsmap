@@ -38,7 +38,7 @@ workflow CountCnvsInBins {
     Boolean count_probs
 
     # Diagnostics options
-    Boolean run_diagnostics
+    Boolean run_diagnostics = true
 
     # Dockers
     String athena_docker
@@ -79,9 +79,9 @@ workflow CountCnvsInBins {
       input:
         vcf=SubsetDelSingleChrom.vcf,
         vcf_idx=SubsetDelSingleChrom.vcf_idx,
-        query=bins_bed,
-        query_idx=bins_bed_idx,
-        query_is_paired=bins_are_paired,
+        bins_bed=bins_bed,
+        bins_bed_idx=bins_bed_idx,
+        bins_are_paired=bins_are_paired,
         count_probs=count_probs,
         contig=contig,
         prefix="~{prefix}.DEL",
@@ -94,9 +94,9 @@ workflow CountCnvsInBins {
       input:
         vcf=SubsetDupSingleChrom.vcf,
         vcf_idx=SubsetDupSingleChrom.vcf_idx,
-        query=bins_bed,
-        query_idx=bins_bed_idx,
-        query_is_paired=bins_are_paired,
+        bins_bed=bins_bed,
+        bins_bed_idx=bins_bed_idx,
+        bins_are_paired=bins_are_paired,
         count_probs=count_probs,
         contig=contig,
         prefix="~{prefix}.DUP",
@@ -113,9 +113,9 @@ workflow CountCnvsInBins {
     if ( !bins_are_paired ) {
 
       # Step 3ai. Run diagnostics on DELs overlapping 1D bins
-      call Utils.GetBinDiagnostics as GetDelBinDiagnostics{
+      call Utils.GetBinDiagnostics as GetDelBinDiagnostics {
         input:
-          bin_counts=CountBinDels.counts,
+          bin_counts=CountBinDels.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DEL",
           prefix=prefix,
@@ -124,9 +124,9 @@ workflow CountCnvsInBins {
       }
 
       # Step 3aii. Run diagnostics on DUPs overlapping 1D bins
-      call Utils.GetBinDiagnostics as GetDupBinDiagnostics{
+      call Utils.GetBinDiagnostics as GetDupBinDiagnostics {
         input:
-          bin_counts=CountBinDups.counts,
+          bin_counts=CountBinDups.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DUP",
           prefix=prefix,
@@ -154,9 +154,9 @@ workflow CountCnvsInBins {
     if ( bins_are_paired ) {
 
       # Step 3bi. Run diagnostics on DELs with breakpoints in 2D bins
-      call Utils.GetPairDiagnostics as GetDelPairDiagnostics{
+      call Utils.GetPairDiagnostics as GetDelPairDiagnostics {
         input:
-          pair_counts=CountBinDels.counts,
+          pair_counts=CountBinDels.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DEL",
           prefix=prefix,
@@ -165,9 +165,9 @@ workflow CountCnvsInBins {
       }
 
       # Step 3bii. Run diagnostics on DUPs with breakpoints in 2D bins
-      call Utils.GetPairDiagnostics as GetDupPairDiagnostics{
+      call Utils.GetPairDiagnostics as GetDupPairDiagnostics {
         input:
-          pair_counts=CountBinDups.counts,
+          pair_counts=CountBinDups.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DUP",
           prefix=prefix,
@@ -194,8 +194,10 @@ workflow CountCnvsInBins {
   }
 
   output {
-    Array[File] bin_del_counts = CountBinDels.counts
-    Array[File] bin_dup_counts = CountBinDups.counts
+    Array[File] bin_del_counts = CountBinDels.bins_w_counts
+    Array[File] bin_del_counts_idxs = CountBinDels.bins_w_counts_idx
+    Array[File] bin_dup_counts = CountBinDups.bins_w_counts
+    Array[File] bin_dup_counts_idxs = CountBinDups.bins_w_counts_idx
     File? bin_del_diagnostics = MergeDelBinDiagnostics.tarball
     File? bin_dup_diagnostics = MergeDupBinDiagnostics.tarball
     File? pair_del_diagnostics = MergeDelPairDiagnostics.tarball
@@ -259,9 +261,9 @@ task CountCnvs {
   input {
     File vcf
     File vcf_idx
-    File query
-    File query_idx
-    Boolean query_is_paired
+    File bins_bed
+    File bins_bed_idx
+    Boolean bins_are_paired
     Boolean count_probs
     String contig
     String prefix
@@ -272,14 +274,14 @@ task CountCnvs {
   }
 
   String outfile = (
-    prefix + ".~{true='pairs' false='bins' query_is_paired}" +
-    ".~{true='probs' false='counts' count_probs}" + "." + contig + ".tsv.gz"
+    prefix + ".~{true='pairs' false='bins' bins_are_paired}" +
+    ".~{true='probs' false='counts' count_probs}" + "." + contig + ".bed.gz"
   )
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2.5,
-    disk_gb: 10 + ceil(2 * size([query, vcf], "GB")),
+    disk_gb: 10 + ceil(2 * size([bins_bed, vcf], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -290,17 +292,19 @@ task CountCnvs {
     set -euo pipefail
 
     # Count SVs
-    athena_cmd="athena count-sv --query-format ~{true='pairs' false='bins' query_is_paired}"
-    athena_cmd="$athena_cmd --comparison ~{true='breakpoint' false='overlap' query_is_paired}"
+    athena_cmd="athena count-sv --query-format ~{true='pairs' false='bins' bins_are_paired}"
+    athena_cmd="$athena_cmd --comparison ~{true='breakpoint' false='overlap' bins_are_paired}"
     athena_cmd="$athena_cmd ~{true='--probabilities' false='' count_probs}"
     athena_cmd="$athena_cmd --outfile ~{outfile} --bgzip"
-    athena_cmd="$athena_cmd ~{vcf} ~{query}"
+    athena_cmd="$athena_cmd ~{vcf} ~{bins_bed}"
     echo -e "Now counting SVs using command:\n$athena_cmd"
     eval $athena_cmd
+    tabix -f ~{outfile}
   >>>
 
   output {
-    File counts = outfile
+    File bins_w_counts = outfile
+    File bins_w_counts_idx = outfile + ".tbi"
   }
   
   runtime {
