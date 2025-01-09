@@ -46,6 +46,8 @@ summarize.bins <- function(bins) {
   ))
   colnames(df) <- c("contig", "no_sv", "has_sv")
   df$pct_has_sv <- df$has_sv / (df$has_sv + df$no_sv)
+
+  return(df)
 }
 
 
@@ -84,7 +86,7 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   # Prep plotting area
   prep.plot.area(
     xlims = c(0, n.bars), ylims = ylims,
-    parmar = c(2.1, 3.2, 1.2, 0.3)
+    parmar = c(2.75, 3.2, 1.2, 0.3)
   )
 
   # Add bars
@@ -124,7 +126,7 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
       cex.axis = x.label.cex, las = x.label.las
     )
   })
-  mtext(1, line = 1.25, text = x.axis.title)
+  mtext(1, line = 1.8, text = x.axis.title)
 
   # Add Y axis
   y.ax.at <- axTicks(2)
@@ -209,7 +211,7 @@ bins <- load.bins(bins.in)
 dat <- summarize.bins(bins)
 
 # Merge counts per contig & write to output file
-write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = "."),
+write.table(dat, paste(out.prefix, "counts_per_contig.tsv", sep = "."),
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
