@@ -490,7 +490,7 @@ task InferBinSize {
 # Collect diagnostic stats and plots for 1D bins
 task GetBinDiagnostics {
   input {
-    Array[File] bin_counts
+    File bin_counts
     Boolean counts_are_probs
     String cnv
     String prefix
@@ -500,7 +500,7 @@ task GetBinDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  String merged_counts_bedfile = (
+  String processed_counts_bedfile = (
     prefix + "." + cnv + ".bins" +
     ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
   )
@@ -518,22 +518,20 @@ task GetBinDiagnostics {
   command <<<
     set -euo pipefail
 
-    # Merge bins and keep first four columns only
-    zcat ~{bin_counts[0]} | sed -n '1p' | cut -f1-4 > ~{merged_counts_bedfile}
-    zcat ~{sep=" " bin_counts} | grep -ve '^#' | cut -f1-4 >> ~{merged_counts_bedfile}
-    bgzip -f ~{merged_counts_bedfile}
-    tabix -f ~{merged_counts_bedfile}.gz
+    # Keep first four columns only
+    zcat ~{bin_counts} | cut -f1-4 | bgzip -c > ~{processed_counts_bedfile}.gz
+    tabix -f ~{processed_counts_bedfile}.gz
 
     # Get diagnostics
     mkdir -p outputs/
     /opt/dsmap/analysis/mu/get_bin_diagnostics.R \
-      --cnv ~{cnv} ~{merged_counts_bedfile}.gz \
+      --cnv ~{cnv} ~{processed_counts_bedfile}.gz \
       outputs/~{prefix}.~{cnv}.bins
   >>>
 
   output {
-    File merged_counts_bed = "~{merged_counts_bedfile}.gz"
-    File merged_counts_bed_idx = "~{merged_counts_bedfile}.gz.tbi"
+    File processed_counts_bed = "~{processed_counts_bedfile}.gz"
+    File processed_counts_bed_idx = "~{processed_counts_bedfile}.gz.tbi"
     Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.bins*")
   }
   
@@ -562,7 +560,7 @@ task GetPairDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  String merged_counts_bedfile = (
+  String processed_counts_bedfile = (
     prefix + "." + cnv + ".pairs" +
     ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
   )
@@ -581,21 +579,21 @@ task GetPairDiagnostics {
     set -euo pipefail
 
     # Merge pairs and keep first four columns only
-    zcat ~{pair_counts[0]} | sed -n '1p' | cut -f1-4 > ~{merged_counts_bedfile}
-    zcat ~{sep=" " pair_counts} | grep -ve '^#' | cut -f1-4 >> ~{merged_counts_bedfile}
-    bgzip -f ~{merged_counts_bedfile}
-    tabix -f ~{merged_counts_bedfile}.gz
+    zcat ~{pair_counts[0]} | sed -n '1p' | cut -f1-4 > ~{processed_counts_bedfile}
+    zcat ~{sep=" " pair_counts} | grep -ve '^#' | cut -f1-4 >> ~{processed_counts_bedfile}
+    bgzip -f ~{processed_counts_bedfile}
+    tabix -f ~{processed_counts_bedfile}.gz
 
     # Get diagnostics
     mkdir -p outputs/
     /opt/dsmap/analysis/mu/get_pair_diagnostics.R \
-      --cnv ~{cnv} ~{merged_counts_bedfile}.gz \
+      --cnv ~{cnv} ~{processed_counts_bedfile}.gz \
       outputs/~{prefix}.~{cnv}.pairs
   >>>
 
   output {
-    File merged_counts_bed = "~{merged_counts_bedfile}.gz"
-    File merged_counts_bed_idx = "~{merged_counts_bedfile}.gz.tbi"
+    File processed_counts_bed = "~{processed_counts_bedfile}.gz"
+    File processed_counts_bed_idx = "~{processed_counts_bedfile}.gz.tbi"
     Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.pairs*")
   }
   

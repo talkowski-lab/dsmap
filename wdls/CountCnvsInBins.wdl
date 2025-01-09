@@ -31,7 +31,7 @@ workflow CountCnvsInBins {
 
     # Bin or bin-pair inputs
     String bins_bucket
-    String? bins_bed_prefix
+    String bins_bed_prefix
     Boolean bins_are_paired
 
     # Count options
@@ -52,116 +52,74 @@ workflow CountCnvsInBins {
   }
 
 
-  Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
+  # If inputs are for bin-pairs, run Steps 1-3
+  if ( bins_are_paired ) {
 
-  # Parallelize per chromosome
-  scatter ( contig in contigs ) {
+    Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
 
-    # Step 1a. Subset DEL VCF to chromosome
-    call SubsetVCFSingleChrom as SubsetDelSingleChrom {
-      input:
-        vcf=del_vcf,
-        contig=contig,
-        athena_cloud_docker=athena_cloud_docker,
-        runtime_attr_override=runtime_attr_subset_vcf
-    }
+    # Parallelize over chromosomes as bin-pair input BEDs are split by chromosome
+    scatter ( contig in contigs ) {
 
-    # Step 1b. Subset DUP VCF to chromosome
-    call SubsetVCFSingleChrom as SubsetDupSingleChrom {
-      input:
-        vcf=dup_vcf,
-        contig=contig,
-        athena_cloud_docker=athena_cloud_docker,
-        runtime_attr_override=runtime_attr_subset_vcf
-    }
-
-    # Infer bins or pairs BED file path
-    File bins_bed = bins_bucket + "/" + bins_bed_prefix + "." + contig + ".bed.gz" 
-    File bins_bed_idx = bins_bed + ".tbi"
-
-    # Step 2a. Count DELs overlapping 1D bins or with breakpoints in 2D bin-pairs
-    call CountCnvs as CountBinDels {
-      input:
-        vcf=SubsetDelSingleChrom.vcf,
-        vcf_idx=SubsetDelSingleChrom.vcf_idx,
-        bins_bed=bins_bed,
-        bins_bed_idx=bins_bed_idx,
-        bins_are_paired=bins_are_paired,
-        count_probs=count_probs,
-        contig=contig,
-        prefix="~{prefix}.DEL",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_count_bin_cnvs
-    }
-
-    # Step 2b. Count DUPs overlapping 1D bins or with breakpoints in 2D bin-pairs
-    call CountCnvs as CountBinDups {
-      input:
-        vcf=SubsetDupSingleChrom.vcf,
-        vcf_idx=SubsetDupSingleChrom.vcf_idx,
-        bins_bed=bins_bed,
-        bins_bed_idx=bins_bed_idx,
-        bins_are_paired=bins_are_paired,
-        count_probs=count_probs,
-        contig=contig,
-        prefix="~{prefix}.DUP",
-        athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_count_bin_cnvs
-    }
-  }
-
-  # [Optional] Step 3. Run diagnostics
-  # If 1D bins were passed in, run steps 3ai-3aiii
-  # Otherwise if 2D bin-pairs were passed in, run steps 3bi-3biii
-  if ( run_diagnostics ) {
-
-    if ( !bins_are_paired ) {
-
-      # Step 3ai. Run diagnostics on DELs overlapping 1D bins
-      call Utils.GetBinDiagnostics as GetDelBinDiagnostics {
+      # Step 1a. Subset DEL VCF to chromosome
+      call SubsetVCFSingleChrom as SubsetDelSingleChrom {
         input:
-          bin_counts=CountBinDels.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DEL",
-          prefix=prefix,
-          dsmap_r_docker=dsmap_r_docker,
-          runtime_attr_override=runtime_attr_diagnostics
+          vcf=del_vcf,
+          contig=contig,
+          athena_cloud_docker=athena_cloud_docker,
+          runtime_attr_override=runtime_attr_subset_vcf
       }
 
-      # Step 3aii. Run diagnostics on DUPs overlapping 1D bins
-      call Utils.GetBinDiagnostics as GetDupBinDiagnostics {
+      # Step 1b. Subset DUP VCF to chromosome
+      call SubsetVCFSingleChrom as SubsetDupSingleChrom {
         input:
-          bin_counts=CountBinDups.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DUP",
-          prefix=prefix,
-          dsmap_r_docker=dsmap_r_docker,
-          runtime_attr_override=runtime_attr_diagnostics
+          vcf=dup_vcf,
+          contig=contig,
+          athena_cloud_docker=athena_cloud_docker,
+          runtime_attr_override=runtime_attr_subset_vcf
       }
 
-      # Step 3aiii. Tar diagnostics for convenience
-      call Utils.MakeTarball as MergeDelBinDiagnostics {
+      # Infer pairs BED file path
+      File bins_bed = bins_bucket + "/" + bins_bed_prefix + "." + contig + ".bed.gz" 
+      File bins_bed_idx = bins_bed + ".tbi"
+
+      # Step 2a. Count DELs with breakpoints in 2D bin-pairs
+      call CountCnvs as CountPairDels {
         input:
-          files_to_tar=GetDelBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.bin_diagnostics",
+          vcf=SubsetDelSingleChrom.vcf,
+          vcf_idx=SubsetDelSingleChrom.vcf_idx,
+          bins_bed=bins_bed,
+          bins_bed_idx=bins_bed_idx,
+          bins_are_paired=bins_are_paired,
+          count_probs=count_probs,
+          contig=contig,
+          prefix="~{prefix}.DEL",
           athena_docker=athena_docker,
-          runtime_attr_override=runtime_attr_diagnostics
+          runtime_attr_override=runtime_attr_count_bin_cnvs
       }
-      call Utils.MakeTarball as MergeDupBinDiagnostics {
+
+      # Step 2b. Count DUPs with breakpoints in 2D bin-pairs
+      call CountCnvs as CountPairDups {
         input:
-          files_to_tar=GetDupBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.bin_diagnostics",
+          vcf=SubsetDupSingleChrom.vcf,
+          vcf_idx=SubsetDupSingleChrom.vcf_idx,
+          bins_bed=bins_bed,
+          bins_bed_idx=bins_bed_idx,
+          bins_are_paired=bins_are_paired,
+          count_probs=count_probs,
+          contig=contig,
+          prefix="~{prefix}.DUP",
           athena_docker=athena_docker,
-          runtime_attr_override=runtime_attr_diagnostics
+          runtime_attr_override=runtime_attr_count_bin_cnvs
       }
     }
 
-    if ( bins_are_paired ) {
+    # [Optional] Step 3. Run diagnostics
+    if ( run_diagnostics ) {
 
-      # Step 3bi. Run diagnostics on DELs with breakpoints in 2D bins
+      # Step 3a. Run diagnostics on DELs with breakpoints in 2D bins
       call Utils.GetPairDiagnostics as GetDelPairDiagnostics {
         input:
-          pair_counts=CountBinDels.bins_w_counts,
+          pair_counts=CountPairDels.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DEL",
           prefix=prefix,
@@ -169,10 +127,10 @@ workflow CountCnvsInBins {
           runtime_attr_override=runtime_attr_diagnostics
       }
 
-      # Step 3bii. Run diagnostics on DUPs with breakpoints in 2D bins
+      # Step 3b. Run diagnostics on DUPs with breakpoints in 2D bins
       call Utils.GetPairDiagnostics as GetDupPairDiagnostics {
         input:
-          pair_counts=CountBinDups.bins_w_counts,
+          pair_counts=CountPairDups.bins_w_counts,
           counts_are_probs=count_probs,
           cnv="DUP",
           prefix=prefix,
@@ -180,7 +138,7 @@ workflow CountCnvsInBins {
           runtime_attr_override=runtime_attr_diagnostics
       }
 
-      # Step 3biii. Tar diagnostics for convenience
+      # Step 3c. Tar diagnostics for convenience
       call Utils.MakeTarball as MergeDelPairDiagnostics {
         input:
           files_to_tar=GetDelPairDiagnostics.outputs,
@@ -198,15 +156,108 @@ workflow CountCnvsInBins {
     }
   }
 
+  # If inputs are for bin-pairs, run Steps 4-5
+  if ( !bins_are_paired ) {
+
+    # Infer bins BED file path
+    File bins_bed = bins_bucket + "/" + bins_bed_prefix + ".bed.gz" 
+    File bins_bed_idx = bins_bed + ".tbi"
+
+    # Step 4a. Count DELs overlapping 1D bins
+    call CountCnvs as CountBinDels {
+      input:
+        vcf=del_vcf,
+        vcf_idx=del_vcf_idx,
+        bins_bed=bins_bed,
+        bins_bed_idx=bins_bed_idx,
+        bins_are_paired=bins_are_paired,
+        count_probs=count_probs,
+        prefix="~{prefix}.DEL",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_count_bin_cnvs
+    }
+
+    # Step 4b. Count DUPs overlapping 1D bins
+    call CountCnvs as CountBinDups {
+      input:
+        vcf=dup_vcf,
+        vcf_idx=dup_vcf_idx,
+        bins_bed=bins_bed,
+        bins_bed_idx=bins_bed_idx,
+        bins_are_paired=bins_are_paired,
+        count_probs=count_probs,
+        prefix="~{prefix}.DUP",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_count_bin_cnvs
+    }
+
+    # [Optional] Step 5. Run diagnostics
+    if ( run_diagnostics ) {
+
+      # Step 5a. Run diagnostics on DELs overlapping 1D bins
+      call Utils.GetBinDiagnostics as GetDelBinDiagnostics {
+        input:
+          bin_counts=CountBinDels.bins_w_counts,
+          counts_are_probs=count_probs,
+          cnv="DEL",
+          prefix=prefix,
+          dsmap_r_docker=dsmap_r_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+
+      # Step 5b. Run diagnostics on DUPs overlapping 1D bins
+      call Utils.GetBinDiagnostics as GetDupBinDiagnostics {
+        input:
+          bin_counts=CountBinDups.bins_w_counts,
+          counts_are_probs=count_probs,
+          cnv="DUP",
+          prefix=prefix,
+          dsmap_r_docker=dsmap_r_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+
+      # Step 5c. Tar diagnostics for convenience
+      call Utils.MakeTarball as MergeDelBinDiagnostics {
+        input:
+          files_to_tar=GetDelBinDiagnostics.outputs,
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.bin_diagnostics",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+      call Utils.MakeTarball as MergeDupBinDiagnostics {
+        input:
+          files_to_tar=GetDupBinDiagnostics.outputs,
+          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.bin_diagnostics",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_diagnostics
+      }
+    }
+  }
+
+
   output {
-    Array[File] bin_del_counts = CountBinDels.bins_w_counts
-    Array[File] bin_del_counts_idxs = CountBinDels.bins_w_counts_idx
-    Array[File] bin_dup_counts = CountBinDups.bins_w_counts
-    Array[File] bin_dup_counts_idxs = CountBinDups.bins_w_counts_idx
-    File? bin_del_diagnostics = MergeDelBinDiagnostics.tarball
-    File? bin_dup_diagnostics = MergeDupBinDiagnostics.tarball
-    File? pair_del_diagnostics = MergeDelPairDiagnostics.tarball
-    File? pair_dup_diagnostics = MergeDupPairDiagnostics.tarball
+    # Resolve optional types
+    Array[File] bin_del_counts = select_first(
+      [CountPairDels.bins_w_counts, [select_first([CountBinDels.bins_w_counts])]]
+    )
+    Array[File] bin_del_counts_idxs = select_first(
+      [CountPairDels.bins_w_counts_idx, [select_first([CountBinDels.bins_w_counts_idx])]]
+    )
+    Array[File] bin_dup_counts = select_first(
+      [CountPairDups.bins_w_counts, [select_first([CountBinDups.bins_w_counts])]]
+    )
+    Array[File] bin_dup_counts_idxs = select_first(
+      [CountPairDups.bins_w_counts_idx, [select_first([CountBinDups.bins_w_counts_idx])]]
+    )
+    
+    File? bin_del_diagnostics = (
+      if bins_are_paired then MergeDelPairDiagnostics.tarball
+      else MergeDelBinDiagnostics.tarball
+    )
+    File? bin_dup_diagnostics = (
+      if bins_are_paired then MergeDupPairDiagnostics.tarball
+      else MergeDupBinDiagnostics.tarball
+    )
   }
 }
 
@@ -270,7 +321,7 @@ task CountCnvs {
     File bins_bed_idx
     Boolean bins_are_paired
     Boolean count_probs
-    String contig
+    String? contig
     String prefix
 
     String athena_docker
@@ -280,12 +331,14 @@ task CountCnvs {
 
   String outfile = (
     prefix + ".~{true='pairs' false='bins' bins_are_paired}" +
-    ".~{true='probs' false='counts' count_probs}" + "." + contig + ".bed.gz"
+    ".~{true='probs' false='counts' count_probs}" + 
+    "~{if defined(contig) then '.~{contig}' else ''}" +
+    ".bed.gz"
   )
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 2.5,
+    mem_gb: 4,
     disk_gb: 10 + ceil(2 * size([bins_bed, vcf], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
