@@ -85,8 +85,8 @@ workflow CountCnvsInBins {
       # Step 2a. Count DELs with breakpoints in 2D bin-pairs
       call CountCnvs as CountPairDels {
         input:
-          vcf=SubsetDelSingleChrom.vcf,
-          vcf_idx=SubsetDelSingleChrom.vcf_idx,
+          vcf=SubsetDelSingleChrom.chr_vcf,
+          vcf_idx=SubsetDelSingleChrom.chr_vcf_idx,
           bins_bed=bins_bed,
           bins_bed_idx=bins_bed_idx,
           bins_are_paired=bins_are_paired,
@@ -100,8 +100,8 @@ workflow CountCnvsInBins {
       # Step 2b. Count DUPs with breakpoints in 2D bin-pairs
       call CountCnvs as CountPairDups {
         input:
-          vcf=SubsetDupSingleChrom.vcf,
-          vcf_idx=SubsetDupSingleChrom.vcf_idx,
+          vcf=SubsetDupSingleChrom.chr_vcf,
+          vcf_idx=SubsetDupSingleChrom.chr_vcf_idx,
           bins_bed=bins_bed,
           bins_bed_idx=bins_bed_idx,
           bins_are_paired=bins_are_paired,
@@ -296,8 +296,8 @@ task SubsetVCFSingleChrom {
   >>>
 
   output {
-    File vcf = "~{prefix}.~{contig}.vcf.gz"
-    File vcf_idx = "~{prefix}.~{contig}.vcf.gz.tbi"
+    File chr_vcf = "~{prefix}.~{contig}.vcf.gz"
+    File chr_vcf_idx = "~{prefix}.~{contig}.vcf.gz.tbi"
   }
   
   runtime {
@@ -329,10 +329,12 @@ task CountCnvs {
     RuntimeAttr? runtime_attr_override
   }
 
+  String bin_pair_prefix = if bins_are_paired then "pairs" else "bins"
+  String count_probs_prefix = if count_probs then "probs" else "counts"
+  String contig_prefix = select_first([contig, ""])
   String outfile = (
-    prefix + ".~{true='pairs' false='bins' bins_are_paired}" +
-    ".~{true='probs' false='counts' count_probs}" + 
-    "~{if defined(contig) then '.~{contig}' else ''}" +
+    prefix + "." + bin_pair_prefix + "." + count_probs_prefix +
+    ( if contig_prefix == "" then contig_prefix else "." + contig_prefix ) +
     ".bed.gz"
   )
 

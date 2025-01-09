@@ -502,7 +502,7 @@ task GetBinDiagnostics {
 
   String processed_counts_bedfile = (
     prefix + "." + cnv + ".bins" +
-    ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
+    ".merged_" + ( if counts_are_probs then "probs" else "counts" ) + ".bed"
   )
 
   RuntimeAttr default_attr = object {
@@ -562,7 +562,7 @@ task GetPairDiagnostics {
 
   String processed_counts_bedfile = (
     prefix + "." + cnv + ".pairs" +
-    ".merged_~{true='probs' false='counts' counts_are_probs}" + ".bed"
+    ".merged_" + ( if counts_are_probs then "probs" else "counts" ) + ".bed"
   )
 
   RuntimeAttr default_attr = object {
