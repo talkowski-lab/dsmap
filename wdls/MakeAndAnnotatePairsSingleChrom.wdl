@@ -173,7 +173,7 @@ task MakePairs {
     # Build options for athena pair-bins
     athena_options=""
     if [ "~{defined(pair_exclusion_mask)}" == "true" ]; then
-      athena_options="$athena_options --exclusion-list ~{sep='--exclusion-list ' pair_exclusion_mask}"
+      athena_options="$athena_options --exclusion-list ~{sep=' --exclusion-list ' pair_exclusion_mask}"
     fi
 
     # Pair bins with athena

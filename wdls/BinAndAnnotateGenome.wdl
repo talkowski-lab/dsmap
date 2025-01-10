@@ -327,7 +327,7 @@ task MakeBins {
 
     # Make bins & tabix output BED
     athena make-bins \
-      --exclusion-list-all ~{sep='--exclusion-list-all ' bin_exclusion_mask} \
+      --exclusion-list-all ~{sep=' --exclusion-list-all ' bin_exclusion_mask} \
       --buffer ~{bin_size} \
       --include-chroms $( cut -f1 contigs.genome | paste -s -d, ) \
       --bgzip \
