@@ -238,16 +238,16 @@ workflow CountCnvsInBins {
   output {
     # Resolve optional types
     Array[File] bin_del_counts = select_first(
-      [CountPairDels.bins_w_counts, [select_first([CountBinDels.bins_w_counts])]]
+      [CountPairDels.bins_w_counts, [select_first([CountBinDels.bins_w_counts, ""])]]
     )
     Array[File] bin_del_counts_idxs = select_first(
-      [CountPairDels.bins_w_counts_idx, [select_first([CountBinDels.bins_w_counts_idx])]]
+      [CountPairDels.bins_w_counts_idx, [select_first([CountBinDels.bins_w_counts_idx, ""])]]
     )
     Array[File] bin_dup_counts = select_first(
-      [CountPairDups.bins_w_counts, [select_first([CountBinDups.bins_w_counts])]]
+      [CountPairDups.bins_w_counts, [select_first([CountBinDups.bins_w_counts, ""])]]
     )
     Array[File] bin_dup_counts_idxs = select_first(
-      [CountPairDups.bins_w_counts_idx, [select_first([CountBinDups.bins_w_counts_idx])]]
+      [CountPairDups.bins_w_counts_idx, [select_first([CountBinDups.bins_w_counts_idx, ""])]]
     )
     
     File? bin_del_diagnostics = (

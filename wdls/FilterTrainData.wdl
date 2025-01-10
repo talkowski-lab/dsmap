@@ -21,7 +21,7 @@ workflow FilterTrainData {
   input {
     # General inputs
     String annotated_pairs_w_counts_bucket
-    String? annotated_pairs_w_counts_bed_prefix
+    String annotated_pairs_w_counts_bed_prefix
     Boolean counts_are_probs
     File contigs_fai
     File training_mask
