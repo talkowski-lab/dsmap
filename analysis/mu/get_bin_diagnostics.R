@@ -36,7 +36,7 @@ summarize.bins <- function(bins) {
   has_sv <- bins$feats[, 1] >= 0.5
 
   # Compute dataframe of counts per contig based on SV overlap
-  df <- cbind(contigs, as.data.frame(
+  df.by.contig <- cbind(contigs, as.data.frame(
     do.call("rbind", lapply(contigs, function(contig) {
       c(
         length(which(bins$coords[, 1] == contig & !(has_sv))),
@@ -44,10 +44,13 @@ summarize.bins <- function(bins) {
       )
     }))
   ))
-  colnames(df) <- c("contig", "no_sv", "has_sv")
-  df$pct_has_sv <- df$has_sv / (df$has_sv + df$no_sv)
+  colnames(df.by.contig) <- c("contig", "no_sv", "has_sv")
+  df.by.contig$pct_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
 
-  return(df)
+  df.overall <- data.frame(no_sv = sum(df.by.contig$no_sv), has_sv = sum(df.by.contig$has_sv))
+  df.overall$pct_has_sv <- df.overall$has_sv / (df.overall$has_sv + df.overall$no_sv)
+
+  return(list("contig" = df.by.contig, "overall" = df.overall))
 }
 
 
@@ -210,8 +213,13 @@ bins <- load.bins(bins.in)
 # Summarize counts
 dat <- summarize.bins(bins)
 
-# Merge counts per contig & write to output file
-write.table(dat, paste(out.prefix, "counts_per_contig.tsv", sep = "."),
+# Write overall counts to output file
+write.table(dat[["overall"]], paste(out.prefix, "overall_counts.tsv", sep = "."),
+  row.names = F, col.names = T, sep = "\t", quote = F
+)
+
+# Write counts per contig to output file
+write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = "."),
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
@@ -226,7 +234,7 @@ for (count_type in c("counts", "pcts")) {
     height = 2.5, width = 4.25
   )
   plot.counts(
-    dat,
+    dat[["contig"]],
     pct = (count_type == "pcts"),
     title = "Bins",
     x.axis.title = "Chromosome", cnv = cnv,

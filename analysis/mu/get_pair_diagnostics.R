@@ -62,7 +62,10 @@ summarize.pairs <- function(pairs) {
   colnames(df.by.size) <- c("pair_distance_kb", "no_sv", "has_sv")
   df.by.size$pct_has_sv <- df.by.size$has_sv / (df.by.size$has_sv + df.by.size$no_sv)
 
-  return(list("contig" = df.by.contig, "size" = df.by.size))
+  df.overall <- data.frame(no_sv = sum(df.by.contig$no_sv), has_sv = sum(df.by.contig$has_sv))
+  df.overall$pct_has_sv <- df.overall$has_sv / (df.overall$has_sv + df.overall$no_sv)
+
+  return(list("contig" = df.by.contig, "size" = df.by.size, "overall" = df.overall))
 }
 
 
@@ -225,12 +228,17 @@ pairs <- load.bins(pairs.in)
 # Summarize counts
 dat <- summarize.pairs(pairs)
 
-# Merge counts per contig & write to output file
+# Write overall counts to output file
+write.table(dat[["overall"]], paste(out.prefix, "overall_counts.tsv", sep = "."),
+  row.names = F, col.names = T, sep = "\t", quote = F
+)
+
+# Write counts per contig to output file
 write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = "."),
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
-# Merge counts by size & write to output file
+# Write counts by size to output file
 write.table(dat[["size"]], paste(out.prefix, "counts_vs_distance.tsv", sep = "."),
   row.names = F, col.names = T, sep = "\t", quote = F
 )
