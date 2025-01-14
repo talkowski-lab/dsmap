@@ -10,8 +10,6 @@
 
 # Collect diagnostics for probabilities of observed CNVs in bin-pairs
 
-# TODO: Handle quantitative counts that are not binary/probabilities
-
 
 #########
 # Setup #
@@ -31,13 +29,13 @@ dsmapR::load.constants("colors")
 ##################
 # Summarize distributions of pairs with CNV probabilities
 # for an input BED loaded with dsmapR::load.bins()
-summarize.pairs <- function(pairs) {
+summarize.pairs.binary <- function(pairs) {
   contigs <- unique(pairs$coords[, 1])
   binsize <- infer.bin.size(pairs$coords)
   sizes <- pairs$coords[, 3] - pairs$coords[, 2] - binsize
   has_sv <- pairs$feats[, 1] >= 0.5
 
-  # Compute dataframe of counts per contig based on SV overlap
+  # Compute number of pairs per contig with and without CNVs
   df.by.contig <- cbind(contigs, as.data.frame(
     do.call("rbind", lapply(contigs, function(contig) {
       c(
@@ -47,9 +45,8 @@ summarize.pairs <- function(pairs) {
     }))
   ))
   colnames(df.by.contig) <- c("contig", "no_sv", "has_sv")
-  df.by.contig$pct_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
 
-  # Compute dataframe of counts by bin size
+  # Compute number of pairs per bin size with and without CNVs
   size.range <- seq(0, max(sizes), by = binsize)
   df.by.size <- cbind(size.range / 1000, as.data.frame(
     do.call("rbind", lapply(size.range, function(size) {
@@ -60,33 +57,120 @@ summarize.pairs <- function(pairs) {
     }))
   ))
   colnames(df.by.size) <- c("pair_distance_kb", "no_sv", "has_sv")
-  df.by.size$pct_has_sv <- df.by.size$has_sv / (df.by.size$has_sv + df.by.size$no_sv)
 
+  # Compute number of pairs per size type (same-bin, adjacent-bin, other)
+  # with and without CNVs
+  adjacencies <- ifelse(sizes == 0, "same", ifelse(sizes == binsize, "adj", "none"))
+  adjacency.types <- unique(adjacencies)
+  df.by.adjacency <- cbind(adjacency.types, as.data.frame(
+    do.call("rbind", lapply(adjacency.types, function(adjacency) {
+      c(
+        length(which(adjacencies == adjacency & !(has_sv))),
+        length(which(adjacencies == adjacency & has_sv))
+      )
+    }))
+  ))
+  colnames(df.by.adjacency) <- c("adjacency", "no_sv", "has_sv")
+  df.by.adjacency$adjacency <- factor(
+    df.by.adjacency$adjacency,
+    levels = c("same", "adj", "none")
+  )
+
+  # Compute total number of pairs with and without CNVs
   df.overall <- data.frame(no_sv = sum(df.by.contig$no_sv), has_sv = sum(df.by.contig$has_sv))
-  df.overall$pct_has_sv <- df.overall$has_sv / (df.overall$has_sv + df.overall$no_sv)
 
-  return(list("contig" = df.by.contig, "size" = df.by.size, "overall" = df.overall))
+  # Compute proportions of pairs with and without CNVs
+  dfs <- lapply(
+    list(
+      "contig" = df.by.contig,
+      "size" = df.by.size,
+      "adjacency" = df.by.adjacency,
+      "overall" = df.overall
+    ), function(df) {
+      df$prop_has_sv <- df$has_sv / (df$has_sv + df$no_sv)
+      return(df)
+    }
+  )
+
+  return(dfs)
+}
+
+# Summarize distributions of pairs with CNV integer counts
+# for an input BED loaded with dsmapR::load.bins()
+summarize.pairs.integer <- function(pairs) {
+  contigs <- unique(pairs$coords[, 1])
+  binsize <- infer.bin.size(pairs$coords)
+  sizes <- pairs$coords[, 3] - pairs$coords[, 2] - binsize
+  n.svs <- pairs$feats[, 1]
+
+  # Compute number of pairs per contig with each number of CNVs
+  # Do not fill in zeros
+  df.by.contig <- as.data.frame(do.call("rbind", lapply(contigs, function(contig) {
+    cbind(contig, as.data.frame(table(n.svs[pairs$coords[, 1] == contig])))
+  })))
+  colnames(df.by.contig) <- c("contig", "n_svs", "n_pairs")
+
+  # Compute number of pairs by bin size with each number of CNVs
+  size.range <- seq(0, max(sizes), by = binsize)
+  df.by.size <- as.data.frame(do.call("rbind", lapply(size.range, function(size) {
+    cbind(size / 1000, as.data.frame(table(n.svs[sizes == size])))
+  })))
+  colnames(df.by.size) <- c("pair_distance_kb", "n_svs", "n_pairs")
+
+  # Compute number of pairs per size type (same-bin, adjacent-bin, other)
+  # with each number of CNVs
+  adjacencies <- ifelse(sizes == 0, "same", ifelse(sizes == binsize, "adj", "none"))
+  adjacency.types <- unique(adjacencies)
+  df.by.adjacency <- as.data.frame(do.call(
+    "rbind",
+    lapply(adjacency.types, function(adjacency) {
+      cbind(adjacency, as.data.frame(table(n.svs[adjacencies == adjacency])))
+    })
+  ))
+  colnames(df.by.adjacency) <- c("adjacency", "n_svs", "n_pairs")
+  df.by.adjacency$adjacency <- factor(
+    df.by.adjacency$adjacency,
+    levels = c("same", "adj", "none")
+  )
+
+  df.overall <- as.data.frame(table(n.svs))
+  colnames(df.overall) <- c("n_svs", "n_pairs")
+  df.overall$prop_pairs <- df.overall$n_pairs / sum(df.overall$n_pairs)
+
+  # Compute proportions of pairs with each number of CNVs
+  dfs <- c(lapply(list(
+    "contig" = df.by.contig,
+    "size" = df.by.size,
+    "adjacency" = df.by.adjacency
+  ), function(df) {
+    df$prop_pairs <- do.call("c", by(df, df[, 1], function(x) {
+      x$n_pairs / sum(x$n_pairs)
+    }))
+    return(df)
+  }), list("overall" = df.overall))
+
+  return(dfs)
 }
 
 
 ######################
 # Plotting functions #
 ######################
-# Barplots of bin-pair positive vs. negative counts or positive percentage
+# Barplots of bin-pair positive vs. negative counts or positive proportion
 # Optionally colored by CNV type
-plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA,
-                        label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
+plot.counts.binary <- function(df, prop = FALSE, title = NA, x.axis.title = NA, cnv = NA,
+                               label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
   # Set plotting values
   all.x.labels <- df[, 1]
   n.bars <- nrow(df)
   legend.labs <- c()
-  if (pct) {
+  if (prop) {
     if (cnv %in% c("DEL", "DUP", "CNV")) {
       bar.colors <- c(get(paste(cnv, "colors", sep = "."))$main)
     } else {
       bar.colors <- c(browns$main)
     }
-    ylims <- c(0, max(df$pct_has_sv))
+    ylims <- c(0, max(df$prop_has_sv))
   } else {
     if (cnv %in% c("DEL", "DUP", "CNV")) {
       bar.colors <- c(
@@ -108,10 +192,10 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   )
 
   # Add bars
-  if (pct) {
+  if (prop) {
     rect(
       xleft = (1:n.bars) - 1, xright = 1:n.bars, ybottom = 0,
-      ytop = df$pct_has_sv, border = "white", col = bar.colors[1]
+      ytop = df$prop_has_sv, border = "white", col = bar.colors[1]
     )
   } else {
     rect(
@@ -162,10 +246,10 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
-  if (pct) {
-    y.text <- paste("Proportion bin-pairs with", cnv)
+  if (prop) {
+    y.text <- paste("Prop. pairs with", cnv)
   } else {
-    y.text <- "Bin-pairs"
+    y.text <- "Pairs"
     if (!is.null(units)) {
       y.text <- paste(y.text, " (", units, ")", sep = "")
     }
@@ -176,11 +260,84 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   mtext(3, font = 2, text = title, xpd = T)
 
   # Add legend
-  if (!pct) {
+  if (!prop) {
     legend("topright",
       legend = legend.labs, fill = bar.colors,
       cex = 0.85, border = offblack, bg = offwhite, xpd = T
     )
+  }
+}
+
+# Barplots of integer CNV counts by bin-pair grouping
+# Assumes that groupings are defined as factor levels of first column
+# and correspond to group.labels
+# Optionally colored by CNV type
+plot.counts.integer <- function(df, title = NA, group.title = NA, group.labels = NA,
+                                x.axis.title = NA, cnv = NA, label.all.x.ticks = FALSE,
+                                x.label.cex = 1, x.label.las = 1) {
+  # Set plotting values
+  groups <- levels(df[, 1])
+  if (cnv %in% c("DEL", "DUP", "CNV")) {
+    bar.colors <- c(get(paste(cnv, "colors", sep = "."))$main)
+  } else {
+    bar.colors <- c(browns$main)
+  }
+  all.x.labels <- sort(unique(df$n_svs))
+  x.vals <- length(unique(df$n_svs))
+
+  # Prep plotting area
+  par(mfrow = c(length(groups), 1), mar = c(2.5, 3.3, 2.6, 1.5), bty = "n")
+
+  # For each grouping, plot number of pairs with each number of CNVs
+  # with proportion on y-value, number above bar
+  # NOTE: X-labels are potentially non-consecutive integers
+  for (i in seq_along(groups)) {
+    # Subset to data in this grouping
+    group <- groups[i]
+    group.df <- df[df[, 1] == group, ]
+    group.x.labels <- group.df$n_svs
+    group.x.vals <- which(all.x.labels %in% group.x.labels) - 1
+
+    # Create bar plot
+    plot(NA,
+      xlim = c(0, max(x.vals)), ylim = c(-0.05, 1), type = "n", xaxs = "i",
+      xlab = "", xaxt = "n", yaxs = "i", ylab = "", yaxt = "n"
+    )
+    rect(
+      xleft = group.x.vals, xright = group.x.vals + 1, ybottom = 0,
+      ytop = group.df$prop_pairs, border = "white", col = bar.colors[1]
+    )
+    text(group.x.vals + 0.5, group.df$prop_pairs + 0.05, labels = group.df$n_pairs, xpd = T)
+
+    # Add X axis
+    x.ticks <- 0:length(all.x.labels)
+    x.ax.at <- x.ticks[-length(x.ticks)] + 0.5
+    x.ax.labels <- all.x.labels[x.ax.at + 0.5]
+    axis(1, at = c(-10e10, 10e10), col = offblack, tck = 0)
+    axis(1, at = x.ax.at, tck = -0.025, col = offblack, labels = NA)
+    sapply(seq_along(x.ax.at), function(x) {
+      axis(1,
+        at = x.ax.at[x], tick = F, line = -0.65, labels = x.ax.labels[x],
+        cex.axis = x.label.cex, las = x.label.las
+      )
+    })
+    if (i == length(groups)) {
+      mtext(1, line = 1.5, text = x.axis.title)
+    }
+
+    # Add Y axis
+    y.ax.at <- axTicks(2)
+    axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
+    axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
+    axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.at, las = 2)
+    y.text <- "Prop. pairs"
+    mtext(2, line = 2, text = y.text)
+
+    # Add title
+    if (i == 1) {
+      mtext(3, font = 2, line = 1.3, text = title, xpd = T)
+    }
+    mtext(3, font = 2, text = paste(group.title, ": ", group.labels[i], sep = ""), xpd = T, cex = 0.85)
   }
 }
 
@@ -193,6 +350,10 @@ option_list <- list(
   make_option(c("--cnv"),
     help = "Specify CNV type. Used for plotting colors only.",
     type = "character", default = NA
+  ),
+  make_option(c("--integer"),
+    help = "Count data are integers, rather than probabilities or binary 0/1.",
+    action = "store_true", default = FALSE
   )
 )
 
@@ -221,63 +382,111 @@ if (length(args$args) != length(arg_list)) {
 pairs.in <- args$args[1]
 out.prefix <- args$args[2]
 cnv <- opts$cnv
+counts.are.integers <- opts$integer
 
 # Load pairs
 pairs <- load.bins(pairs.in)
 
-# Summarize counts
-dat <- summarize.pairs(pairs)
+if (!counts.are.integers) {
+  # Summarize counts
+  dat <- summarize.pairs.binary(pairs)
 
-# Write overall counts to output file
-write.table(dat[["overall"]], paste(out.prefix, "overall_counts.tsv", sep = "."),
-  row.names = F, col.names = T, sep = "\t", quote = F
-)
+  # Plot bin-pair counts and proportions with CNVs per contig
+  for (count_type in c("counts", "props")) {
+    pdf(
+      paste(
+        out.prefix, paste(count_type, "per_contig", sep = "_"),
+        "pdf",
+        sep = "."
+      ),
+      height = 2.5, width = 4.25
+    )
+    plot.counts.binary(
+      dat[["contig"]],
+      prop = (count_type == "props"),
+      title = "Bin-pairs",
+      x.axis.title = "Chromosome", cnv = cnv,
+      label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
+    )
+    dev.off()
+  }
 
-# Write counts per contig to output file
-write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = "."),
-  row.names = F, col.names = T, sep = "\t", quote = F
-)
+  # Plot bin-pair counts and proportions with CNVs vs. pair distance
+  for (count_type in c("counts", "props")) {
+    pdf(
+      paste(
+        out.prefix, paste(count_type, "vs_distance", sep = "_"),
+        "pdf",
+        sep = "."
+      ),
+      height = 2.5, width = 4.25
+    )
+    plot.counts.binary(
+      dat[["size"]],
+      prop = (count_type == "props"),
+      title = "Bin-pairs",
+      x.axis.title = "Pair distance (kb)", cnv = cnv
+    )
+    dev.off()
+  }
 
-# Write counts by size to output file
-write.table(dat[["size"]], paste(out.prefix, "counts_vs_distance.tsv", sep = "."),
-  row.names = F, col.names = T, sep = "\t", quote = F
-)
+  # Plot bin-pair counts and proportions with CNVs vs. bin adjacency in pair
+  for (count_type in c("counts", "props")) {
+    pdf(
+      paste(
+        out.prefix, paste(count_type, "by_adjacency", sep = "_"),
+        "pdf",
+        sep = "."
+      ),
+      height = 2.5, width = 2
+    )
+    plot.counts.binary(
+      dat[["adjacency"]],
+      prop = (count_type == "props"),
+      title = "Bin-pairs",
+      x.axis.title = "Pair adjacency", cnv = cnv,
+      label.all.x.ticks = T, x.label.cex = 0.85
+    )
+    dev.off()
+  }
+} else {
+  # Summarize counts
+  dat <- summarize.pairs.integer(pairs)
 
-# Plot bin-pair counts and percentages with CNVs per contig
-for (count_type in c("counts", "pcts")) {
+  # Plot counts by size type
   pdf(
     paste(
-      out.prefix, paste(count_type, "per_contig", sep = "_"),
+      out.prefix, "counts_by_adjacency",
       "pdf",
       sep = "."
     ),
-    height = 2.5, width = 4.25
+    height = 5, width = 7
   )
-  plot.counts(
-    dat[["contig"]],
-    pct = (count_type == "pcts"),
-    title = "Bin-pairs",
-    x.axis.title = "Chromosome", cnv = cnv,
-    label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
+  plot.counts.integer(
+    dat[["adjacency"]],
+    title = paste(cnv, "counts by bin-pair adjacency"),
+    group.title = "Adjacency",
+    group.labels = c("Same", "Adjacent", "None"),
+    x.axis.title = paste(cnv, "count in bin-pair"), cnv = cnv,
+    label.all.x.ticks = T, x.label.cex = 0.85
   )
   dev.off()
+
+  # TODO: Plot counts by pair repeat content
+  # NOTE: No plot for bin-pair counts with CNVs per chromosome -
+  # check text file to find these counts
 }
 
-# Plot bin-pair counts and percentages with CNVs vs pair distance
-for (count_type in c("counts", "pcts")) {
-  pdf(
-    paste(
-      out.prefix, paste(count_type, "vs_distance", sep = "_"),
-      "pdf",
-      sep = "."
-    ),
-    height = 2.5, width = 4.25
+group.filenames <- list(
+  "overall" = "overall_counts.tsv",
+  "contig" = "counts_per_contig.tsv",
+  "size" = "counts_vs_distance.tsv",
+  "adjacency" = "counts_by_adjacency.tsv"
+)
+
+# Write counts by each grouping to output TSVs
+for (group in names(dat)) {
+  write.table(dat[[group]], paste(out.prefix, group.filenames[[group]], sep = "."),
+    row.names = F, col.names = T, sep = "\t", quote = F
   )
-  plot.counts(
-    dat[["size"]],
-    pct = (count_type == "pcts"),
-    title = "Bin-pairs",
-    x.axis.title = "Pair distance (kb)", cnv = cnv
-  )
-  dev.off()
 }
