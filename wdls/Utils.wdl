@@ -491,7 +491,6 @@ task InferBinSize {
 task GetBinDiagnostics {
   input {
     File bin_counts
-    Boolean counts_are_probs
     String cnv
     String prefix
 
@@ -500,10 +499,7 @@ task GetBinDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  String processed_counts_bedfile = (
-    prefix + "." + cnv + ".bins" +
-    ".merged_" + ( if counts_are_probs then "probs" else "counts" ) + ".bed"
-  )
+  String processed_counts_bedfile = "~{prefix}.merged.bed"
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -526,13 +522,13 @@ task GetBinDiagnostics {
     mkdir -p outputs/
     /opt/dsmap/analysis/mu/get_bin_diagnostics.R \
       --cnv ~{cnv} ~{processed_counts_bedfile}.gz \
-      outputs/~{prefix}.~{cnv}.bins
+      outputs/~{prefix}
   >>>
 
   output {
     File processed_counts_bed = "~{processed_counts_bedfile}.gz"
     File processed_counts_bed_idx = "~{processed_counts_bedfile}.gz.tbi"
-    Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.bins*")
+    Array[File] outputs = glob("outputs/~{prefix}*")
   }
   
   runtime {
@@ -551,7 +547,6 @@ task GetBinDiagnostics {
 task GetPairDiagnostics {
   input {
     Array[File] pair_counts
-    Boolean counts_are_probs
     String cnv
     String prefix
 
@@ -560,10 +555,8 @@ task GetPairDiagnostics {
     RuntimeAttr? runtime_attr_override
   }
 
-  String processed_counts_bedfile = (
-    prefix + "." + cnv + ".pairs" +
-    ".merged_" + ( if counts_are_probs then "probs" else "counts" ) + ".bed"
-  )
+  
+  String processed_counts_bedfile = "~{prefix}.merged.bed"
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -588,13 +581,13 @@ task GetPairDiagnostics {
     mkdir -p outputs/
     /opt/dsmap/analysis/mu/get_pair_diagnostics.R \
       --cnv ~{cnv} ~{processed_counts_bedfile}.gz \
-      outputs/~{prefix}.~{cnv}.pairs
+      outputs/~{prefix}
   >>>
 
   output {
     File processed_counts_bed = "~{processed_counts_bedfile}.gz"
     File processed_counts_bed_idx = "~{processed_counts_bedfile}.gz.tbi"
-    Array[File] outputs = glob("outputs/~{prefix}.~{cnv}.pairs*")
+    Array[File] outputs = glob("outputs/~{prefix}*")
   }
   
   runtime {

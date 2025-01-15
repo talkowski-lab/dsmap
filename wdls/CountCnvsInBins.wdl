@@ -52,6 +52,11 @@ workflow CountCnvsInBins {
   }
 
 
+  String bin_pair_prefix = if bins_are_paired then "pairs" else "bins"
+  String count_probs_prefix = if count_probs then "probs" else "counts"
+  String del_prefix = prefix + ".DEL" + "." + bin_pair_prefix + "." + count_probs_prefix
+  String dup_prefix = prefix + ".DUP" + "." + bin_pair_prefix + "." + count_probs_prefix
+
   # If inputs are for bin-pairs, run Steps 1-3
   if ( bins_are_paired ) {
 
@@ -92,7 +97,7 @@ workflow CountCnvsInBins {
           bins_are_paired=bins_are_paired,
           count_probs=count_probs,
           contig=contig,
-          prefix="~{prefix}.DEL",
+          prefix=del_prefix,
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_count_bin_cnvs
       }
@@ -107,7 +112,7 @@ workflow CountCnvsInBins {
           bins_are_paired=bins_are_paired,
           count_probs=count_probs,
           contig=contig,
-          prefix="~{prefix}.DUP",
+          prefix=dup_prefix,
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_count_bin_cnvs
       }
@@ -120,8 +125,7 @@ workflow CountCnvsInBins {
       call Utils.GetPairDiagnostics as GetDelPairDiagnostics {
         input:
           pair_counts=CountPairDels.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DEL",
+          cnv=del_prefix,
           prefix=prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -131,26 +135,24 @@ workflow CountCnvsInBins {
       call Utils.GetPairDiagnostics as GetDupPairDiagnostics {
         input:
           pair_counts=CountPairDups.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DUP",
+          cnv=dup_prefix,
           prefix=prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
 
       # Step 3c. Tar diagnostics for convenience
-      String pair_tarball_count_prefix = if count_probs then "probs" else "counts"
       call Utils.MakeTarball as MergeDelPairDiagnostics {
         input:
           files_to_tar=GetDelPairDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{pair_tarball_count_prefix}.pair.diagnostics",
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{bin_pair_prefix}.~{count_probs_prefix}.diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
       call Utils.MakeTarball as MergeDupPairDiagnostics {
         input:
           files_to_tar=GetDupPairDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{pair_tarball_count_prefix}.pair.diagnostics",
+          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{bin_pair_prefix}.~{count_probs_prefix}.diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -173,7 +175,7 @@ workflow CountCnvsInBins {
         bins_bed_idx=bins_bed_idx,
         bins_are_paired=bins_are_paired,
         count_probs=count_probs,
-        prefix="~{prefix}.DEL",
+        prefix=del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_bin_cnvs
     }
@@ -187,7 +189,7 @@ workflow CountCnvsInBins {
         bins_bed_idx=bins_bed_idx,
         bins_are_paired=bins_are_paired,
         count_probs=count_probs,
-        prefix="~{prefix}.DUP",
+        prefix=dup_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_bin_cnvs
     }
@@ -199,8 +201,7 @@ workflow CountCnvsInBins {
       call Utils.GetBinDiagnostics as GetDelBinDiagnostics {
         input:
           bin_counts=CountBinDels.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DEL",
+          cnv=del_prefix,
           prefix=prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -210,8 +211,7 @@ workflow CountCnvsInBins {
       call Utils.GetBinDiagnostics as GetDupBinDiagnostics {
         input:
           bin_counts=CountBinDups.bins_w_counts,
-          counts_are_probs=count_probs,
-          cnv="DUP",
+          cnv=dup_prefix,
           prefix=prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
@@ -222,7 +222,7 @@ workflow CountCnvsInBins {
       call Utils.MakeTarball as MergeDelBinDiagnostics {
         input:
           files_to_tar=GetDelBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{bin_tarball_count_prefix}.bin.diagnostics",
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{count_probs_prefix}.bin.diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -331,11 +331,9 @@ task CountCnvs {
     RuntimeAttr? runtime_attr_override
   }
 
-  String bin_pair_prefix = if bins_are_paired then "pairs" else "bins"
-  String count_probs_prefix = if count_probs then "probs" else "counts"
   String contig_prefix = select_first([contig, ""])
   String outfile = (
-    prefix + "." + bin_pair_prefix + "." + count_probs_prefix +
+    prefix +
     ( if contig_prefix == "" then contig_prefix else "." + contig_prefix ) +
     ".bed.gz"
   )
