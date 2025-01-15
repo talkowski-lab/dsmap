@@ -139,17 +139,18 @@ workflow CountCnvsInBins {
       }
 
       # Step 3c. Tar diagnostics for convenience
+      String pair_tarball_count_prefix = if count_probs then "probs" else "counts"
       call Utils.MakeTarball as MergeDelPairDiagnostics {
         input:
           files_to_tar=GetDelPairDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.pair_diagnostics",
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{pair_tarball_count_prefix}.pair_diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
       call Utils.MakeTarball as MergeDupPairDiagnostics {
         input:
           files_to_tar=GetDupPairDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.pair_diagnostics",
+          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{pair_tarball_count_prefix}.pair_diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -217,17 +218,18 @@ workflow CountCnvsInBins {
       }
 
       # Step 5c. Tar diagnostics for convenience
+      String bin_tarball_count_prefix = if count_probs then "probs" else "counts"
       call Utils.MakeTarball as MergeDelBinDiagnostics {
         input:
           files_to_tar=GetDelBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.bin_diagnostics",
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{bin_tarball_count_prefix}.bin_diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
       call Utils.MakeTarball as MergeDupBinDiagnostics {
         input:
           files_to_tar=GetDupBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.bin_diagnostics",
+          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{bin_tarball_count_prefix}.bin_diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
