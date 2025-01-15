@@ -218,18 +218,17 @@ workflow CountCnvsInBins {
       }
 
       # Step 5c. Tar diagnostics for convenience
-      String bin_tarball_count_prefix = if count_probs then "probs" else "counts"
       call Utils.MakeTarball as MergeDelBinDiagnostics {
         input:
           files_to_tar=GetDelBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{count_probs_prefix}.bin.diagnostics",
+          tarball_prefix="~{prefix}.DEL.CountCnvsInBins.~{bin_pair_prefix}.~{count_probs_prefix}.diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
       call Utils.MakeTarball as MergeDupBinDiagnostics {
         input:
           files_to_tar=GetDupBinDiagnostics.outputs,
-          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{bin_tarball_count_prefix}.bin.diagnostics",
+          tarball_prefix="~{prefix}.DUP.CountCnvsInBins.~{bin_pair_prefix}.~{count_probs_prefix}.diagnostics",
           athena_docker=athena_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
