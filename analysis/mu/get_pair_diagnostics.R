@@ -158,7 +158,7 @@ summarize.pairs.integer <- function(pairs) {
 ######################
 # Barplots of bin-pair positive vs. negative counts or positive proportion
 # Optionally colored by CNV type
-plot.counts.binary <- function(df, prop = FALSE, title = NA, x.axis.title = NA, cnv = NA,
+plot.counts.binary <- function(df, prop = FALSE, title.in = NA, x.axis.title = NA, cnv = NA,
                                label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
   # Set plotting values
   all.x.labels <- df[, 1]
@@ -257,7 +257,7 @@ plot.counts.binary <- function(df, prop = FALSE, title = NA, x.axis.title = NA, 
   mtext(2, line = 2.3, text = y.text)
 
   # Add title
-  mtext(3, font = 2, text = title, xpd = T)
+  mtext(3, font = 2, text = title.in, xpd = T)
 
   # Add legend
   if (!prop) {
@@ -272,7 +272,7 @@ plot.counts.binary <- function(df, prop = FALSE, title = NA, x.axis.title = NA, 
 # Assumes that groupings are defined as factor levels of first column
 # and correspond to group.labels
 # Optionally colored by CNV type
-plot.counts.integer <- function(df, title = NA, group.title = NA, group.labels = NA,
+plot.counts.integer <- function(df, title.in = NA, group.title = NA, group.labels = NA,
                                 x.axis.title = NA, cnv = NA, label.all.x.ticks = FALSE,
                                 x.label.cex = 1, x.label.las = 1) {
   # Set plotting values
@@ -335,7 +335,7 @@ plot.counts.integer <- function(df, title = NA, group.title = NA, group.labels =
 
     # Add title
     if (i == 1) {
-      mtext(3, font = 2, line = 1.3, text = title, xpd = T)
+      mtext(3, font = 2, line = 1.3, text = title.in, xpd = T)
     }
     mtext(3, font = 2, text = paste(group.title, ": ", group.labels[i], sep = ""), xpd = T, cex = 0.85)
   }
@@ -404,7 +404,7 @@ if (!counts.are.integers) {
     plot.counts.binary(
       dat[["contig"]],
       prop = (count_type == "props"),
-      title = "Bin-pairs",
+      title.in = "Bin-pairs",
       x.axis.title = "Chromosome", cnv = cnv,
       label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
     )
@@ -424,7 +424,7 @@ if (!counts.are.integers) {
     plot.counts.binary(
       dat[["size"]],
       prop = (count_type == "props"),
-      title = "Bin-pairs",
+      title.in = "Bin-pairs",
       x.axis.title = "Pair distance (kb)", cnv = cnv
     )
     dev.off()
@@ -443,7 +443,7 @@ if (!counts.are.integers) {
     plot.counts.binary(
       dat[["adjacency"]],
       prop = (count_type == "props"),
-      title = "Bin-pairs",
+      title.in = "Bin-pairs",
       x.axis.title = "Pair adjacency", cnv = cnv,
       label.all.x.ticks = T, x.label.cex = 0.85
     )
@@ -464,7 +464,7 @@ if (!counts.are.integers) {
   )
   plot.counts.integer(
     dat[["adjacency"]],
-    title = paste(cnv, "counts by bin-pair adjacency"),
+    title.in = paste(cnv, "counts by bin-pair adjacency"),
     group.title = "Adjacency",
     group.labels = c("Same", "Adjacent", "None"),
     x.axis.title = paste(cnv, "count in bin-pair"), cnv = cnv,

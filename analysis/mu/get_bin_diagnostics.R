@@ -59,7 +59,7 @@ summarize.bins <- function(bins) {
 ######################
 # Barplots of bin positive vs. negative counts or positive percentage
 # Optionally colored by CNV type
-plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA,
+plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv = NA,
                         label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
   # Set plotting values
   all.x.labels <- df[, 1]
@@ -158,7 +158,7 @@ plot.counts <- function(df, pct = FALSE, title = NA, x.axis.title = NA, cnv = NA
   mtext(2, line = 2.3, text = y.text)
 
   # Add title
-  mtext(3, font = 2, text = title, xpd = T)
+  mtext(3, font = 2, text = title.in, xpd = T)
 
   # Add legend
   if (!pct) {
@@ -236,7 +236,7 @@ for (count_type in c("counts", "pcts")) {
   plot.counts(
     dat[["contig"]],
     pct = (count_type == "pcts"),
-    title = "Bins",
+    title.in = "Bins",
     x.axis.title = "Chromosome", cnv = cnv,
     label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2
   )

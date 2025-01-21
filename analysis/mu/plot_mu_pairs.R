@@ -48,7 +48,7 @@ load.mu.tsv <- function(mu.in, na.val = -49.0) {
 ######################
 # Mutation rate by bin pair distance
 plot.mu.distance <- function(mu, binsize, cnv = NULL,
-                             title = "Mutation rate dist by pair distance") {
+                             title.in = "Mutation rate dist by pair distance") {
   # Set plot parameters
   if (cnv == "DEL") {
     pal <- "Reds"
@@ -124,7 +124,7 @@ plot.mu.distance <- function(mu, binsize, cnv = NULL,
   axis(1, at = c(-10e10, 10e10), col = offblack, tcl = 0)
 
   # Add title
-  mtext(3, font = 2, text = title, xpd = T)
+  mtext(3, font = 2, text = title.in, xpd = T)
 
   # Prep plot area for medians
   prep.plot.area(
@@ -178,7 +178,7 @@ plot.mu.distance <- function(mu, binsize, cnv = NULL,
 }
 
 # Diagonal heatmap of mutation rate in each bin pair along chromosome
-mu.heatmap <- function(mu, binsize, title = "Mutation rate") {
+mu.heatmap <- function(mu, binsize, title.in = "Mutation rate") {
   # Temporary stand-in fix for dsmapR rotate.points
   # TODO: Fix in dsmapR
   rotate.points <- function(coords, angle, x.origin = 0, y.origin = 0) {
@@ -290,7 +290,7 @@ mu.heatmap <- function(mu, binsize, title = "Mutation rate") {
   mtext(1, line = 1.25, text = x.axis.title)
 
   # Add title
-  mtext(3, line = 0.25, font = 2, text = title, xpd = T)
+  mtext(3, line = 0.25, font = 2, text = title.in, xpd = T)
 }
 
 
@@ -336,7 +336,7 @@ mu.in <- args$args[1]
 out.prefix <- args$args[2]
 distance <- opts$distance
 cnv <- opts$cnv
-title <- opts$title
+title.in <- opts$title
 
 # Load mutation rates
 mu <- load.mu.tsv(mu.in)
@@ -351,7 +351,7 @@ if (distance) {
   )
   plot.mu.distance(mu,
     binsize = binsize, cnv = cnv,
-    title = ifelse(is.null(title), "Mutation rate dist by pair distance", title)
+    title.in = ifelse(is.null(title.in), "Mutation rate dist by pair distance", title.in)
   )
   dev.off()
 } else {
@@ -361,7 +361,7 @@ if (distance) {
   )
   mu.heatmap(mu,
     binsize = binsize,
-    title = ifelse(is.null(title), "Mutation rate", title)
+    title.in = ifelse(is.null(title.in), "Mutation rate", title.in)
   )
   dev.off()
 }
