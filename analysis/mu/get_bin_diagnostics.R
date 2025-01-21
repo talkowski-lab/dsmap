@@ -45,10 +45,10 @@ summarize.bins <- function(bins) {
     }))
   ))
   colnames(df.by.contig) <- c("contig", "no_sv", "has_sv")
-  df.by.contig$pct_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
+  df.by.contig$prop_has_sv <- df.by.contig$has_sv / (df.by.contig$has_sv + df.by.contig$no_sv)
 
   df.overall <- data.frame(no_sv = sum(df.by.contig$no_sv), has_sv = sum(df.by.contig$has_sv))
-  df.overall$pct_has_sv <- df.overall$has_sv / (df.overall$has_sv + df.overall$no_sv)
+  df.overall$prop_has_sv <- df.overall$has_sv / (df.overall$has_sv + df.overall$no_sv)
 
   return(list("contig" = df.by.contig, "overall" = df.overall))
 }
@@ -57,7 +57,7 @@ summarize.bins <- function(bins) {
 ######################
 # Plotting functions #
 ######################
-# Barplots of bin positive vs. negative counts or positive percentage
+# Barplots of bin positive vs. negative counts or positive proportion
 # Optionally colored by CNV type
 plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv = NA,
                         label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
@@ -65,13 +65,13 @@ plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv =
   all.x.labels <- df[, 1]
   n.bars <- nrow(df)
   legend.labs <- c()
-  if (pct) {
+  if (prop) {
     if (cnv %in% c("DEL", "DUP", "CNV")) {
       bar.colors <- c(get(paste(cnv, "colors", sep = "."))$main)
     } else {
       bar.colors <- c(browns$main)
     }
-    ylims <- c(0, max(df$pct_has_sv))
+    ylims <- c(0, max(df$prop_has_sv))
   } else {
     if (cnv %in% c("DEL", "DUP", "CNV")) {
       bar.colors <- c(
@@ -93,10 +93,10 @@ plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv =
   )
 
   # Add bars
-  if (pct) {
+  if (prop) {
     rect(
       xleft = (1:n.bars) - 1, xright = 1:n.bars, ybottom = 0,
-      ytop = df$pct_has_sv, border = "white", col = bar.colors[1]
+      ytop = df$prop_has_sv, border = "white", col = bar.colors[1]
     )
   } else {
     rect(
@@ -147,7 +147,7 @@ plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv =
   axis(2, at = c(-10e10, 10e10), col = offblack, tck = 0)
   axis(2, at = y.ax.at, tck = -0.025, col = offblack, labels = NA)
   axis(2, at = y.ax.at, tick = F, line = -0.65, labels = y.ax.labels, las = 2)
-  if (pct) {
+  if (prop) {
     y.text <- paste("Proportion bins with", cnv)
   } else {
     y.text <- "Bins"
@@ -161,7 +161,7 @@ plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv =
   mtext(3, font = 2, text = title.in, xpd = T)
 
   # Add legend
-  if (!pct) {
+  if (!prop) {
     legend("topright",
       legend = legend.labs, fill = bar.colors,
       cex = 0.85, border = offblack, bg = offwhite, xpd = T
@@ -223,8 +223,8 @@ write.table(dat[["contig"]], paste(out.prefix, "counts_per_contig.tsv", sep = ".
   row.names = F, col.names = T, sep = "\t", quote = F
 )
 
-# Plot bin counts and percentages with CNVs per contig
-for (count_type in c("counts", "pcts")) {
+# Plot bin counts and proportions with CNVs per contig
+for (count_type in c("counts", "props")) {
   pdf(
     paste(
       out.prefix, paste(count_type, "per_contig", sep = "_"),
@@ -235,7 +235,7 @@ for (count_type in c("counts", "pcts")) {
   )
   plot.counts(
     dat[["contig"]],
-    pct = (count_type == "pcts"),
+    prop = (count_type == "props"),
     title.in = "Bins",
     x.axis.title = "Chromosome", cnv = cnv,
     label.all.x.ticks = T, x.label.cex = 0.85, x.label.las = 2

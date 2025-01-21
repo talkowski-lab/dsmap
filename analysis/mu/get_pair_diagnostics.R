@@ -440,8 +440,11 @@ if (!counts.are.integers) {
       ),
       height = 2.5, width = 2
     )
+    # Adjust x-labels
+    adj.dat <- dat[["adjacency"]]
+    levels(adj.dat$adjacency) <- c("Same", "Adj.", "None")
     plot.counts.binary(
-      dat[["adjacency"]],
+      adj.dat,
       prop = (count_type == "props"),
       title.in = "Bin-pairs",
       x.axis.title = "Pair adjacency", cnv = cnv,
