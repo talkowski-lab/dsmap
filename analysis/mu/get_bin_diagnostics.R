@@ -59,7 +59,7 @@ summarize.bins <- function(bins) {
 ######################
 # Barplots of bin positive vs. negative counts or positive proportion
 # Optionally colored by CNV type
-plot.counts <- function(df, pct = FALSE, title.in = NA, x.axis.title = NA, cnv = NA,
+plot.counts <- function(df, prop = FALSE, title.in = NA, x.axis.title = NA, cnv = NA,
                         label.all.x.ticks = FALSE, x.label.cex = 1, x.label.las = 1) {
   # Set plotting values
   all.x.labels <- df[, 1]
