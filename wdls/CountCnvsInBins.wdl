@@ -125,8 +125,9 @@ workflow CountCnvsInBins {
       call Utils.GetPairDiagnostics as GetDelPairDiagnostics {
         input:
           pair_counts=CountPairDels.bins_w_counts,
-          cnv=del_prefix,
-          prefix=prefix,
+          counts_are_probs=count_probs,
+          cnv="DEL",
+          prefix=del_prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -135,8 +136,9 @@ workflow CountCnvsInBins {
       call Utils.GetPairDiagnostics as GetDupPairDiagnostics {
         input:
           pair_counts=CountPairDups.bins_w_counts,
-          cnv=dup_prefix,
-          prefix=prefix,
+          counts_are_probs=count_probs,
+          cnv="DUP",
+          prefix=dup_prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -201,8 +203,8 @@ workflow CountCnvsInBins {
       call Utils.GetBinDiagnostics as GetDelBinDiagnostics {
         input:
           bin_counts=CountBinDels.bins_w_counts,
-          cnv=del_prefix,
-          prefix=prefix,
+          cnv="DEL",
+          prefix=del_prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }
@@ -211,8 +213,8 @@ workflow CountCnvsInBins {
       call Utils.GetBinDiagnostics as GetDupBinDiagnostics {
         input:
           bin_counts=CountBinDups.bins_w_counts,
-          cnv=dup_prefix,
-          prefix=prefix,
+          cnv="DUP",
+          prefix=dup_prefix,
           dsmap_r_docker=dsmap_r_docker,
           runtime_attr_override=runtime_attr_diagnostics
       }

@@ -547,6 +547,7 @@ task GetBinDiagnostics {
 task GetPairDiagnostics {
   input {
     Array[File] pair_counts
+    Boolean counts_are_probs
     String cnv
     String prefix
 
@@ -580,6 +581,7 @@ task GetPairDiagnostics {
     # Get diagnostics
     mkdir -p outputs/
     /opt/dsmap/analysis/mu/get_pair_diagnostics.R \
+      ~{true='' false='--integer' counts_are_probs} \
       --cnv ~{cnv} ~{processed_counts_bedfile}.gz \
       outputs/~{prefix}
   >>>
