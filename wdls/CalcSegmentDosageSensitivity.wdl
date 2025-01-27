@@ -51,7 +51,7 @@ workflow CalcSegmentDosageSensitivity {
   Array[String] contigs = transpose(read_tsv(contigs_fai))[0]
 
   # Create athena options
-  if (full_segment_overlap) {
+  if ( full_segment_overlap ) {
     String athena_full_overlap_option = "--fraction 1.0"
   }
   Array[String] athena_sv_options = select_all([athena_full_overlap_option])
@@ -80,7 +80,8 @@ workflow CalcSegmentDosageSensitivity {
     File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP." + contig + ".mu.bed.gz"
     File dup_mu_bed_idx = dup_mu_bed + ".tbi" 
 
-    # Step 2a. Compute mutation rates for all deletions overlapping each segment
+    # Step 2a. Compute mutation rates for all deletions overlapping
+    # bins housing each segment
     call QueryMu as QueryMuDel {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -93,7 +94,8 @@ workflow CalcSegmentDosageSensitivity {
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 2b. Compute mutation rates for all duplications overlapping each segment
+    # Step 2b. Compute mutation rates for all duplications overlapping
+    # bins housing each segment
     call QueryMu as QueryMuDup {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -106,26 +108,30 @@ workflow CalcSegmentDosageSensitivity {
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 3a. Count deletions overlapping each segment
+    # Step 3a. Count deletions overlapping bins housing each segment
     call CountCnvs as CountDel {
       input:
         vcf=del_vcf,
         vcf_idx=del_vcf_idx,
         query=FilterQuerySingleChrom.query_chrom,
         query_idx=FilterQuerySingleChrom.query_chrom_idx,
+        mu_bed=del_mu_bed,
+        mu_bed_idx=del_mu_bed_idx,
         athena_countsv_options=athena_sv_options,
         prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_cnvs
     }
 
-    # Step 3b. Count duplications overlapping each segment
+    # Step 3b. Count duplications overlapping bins housing each segment
     call CountCnvs as CountDup {
       input:
         vcf=dup_vcf,
         vcf_idx=dup_vcf_idx,
         query=FilterQuerySingleChrom.query_chrom,
         query_idx=FilterQuerySingleChrom.query_chrom_idx,
+        mu_bed=dup_mu_bed,
+        mu_bed_idx=dup_mu_bed_idx,
         athena_countsv_options=athena_sv_options,
         prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + dup_prefix,
         athena_docker=athena_docker,
@@ -225,7 +231,11 @@ task FilterQuerySingleChrom {
   command <<<
     set -euo pipefail
 
-    tabix -h ~{query} ~{contig} | bgzip -c > ~{query_prefix}.~{contig}.bed.gz
+    # Sort by chr, start, end position
+    zcat ~{query} | sed -n '1p' > query.header
+    tabix -h ~{query} ~{contig} | grep -ve "^#" | sort -Vk1,1 -k2,2n -k3,3n \
+    | cat query.header - \
+    | bgzip -c > ~{query_prefix}.~{contig}.bed.gz
     tabix -f ~{query_prefix}.~{contig}.bed.gz
   >>>
 
@@ -299,12 +309,18 @@ task QueryMu {
 
 
 # Count number of qualifying CNVs per segment
+# NOTE: To match mu and CNV counting strategies, query segments are extended
+# to the boundaries of the nearest neighboring larger bins in the mu matrix
+# before counting. This means that segments with the same such neighboring bin
+# boundaries will have the same mu, CNV count, and O/E estimates
 task CountCnvs {
   input {
     File vcf
     File vcf_idx
     File query
     File query_idx
+    File mu_bed
+    File mu_bed_idx
     Array[String] athena_countsv_options
     String prefix
 
@@ -312,9 +328,11 @@ task CountCnvs {
 
     RuntimeAttr? runtime_attr_override
   }
+  # TODO: Adjust this for other file types
+  String query_prefix = basename(query, ".bed.gz")
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 2.5,
     disk_gb: 10 + ceil(2 * size([query, vcf], "GB")),
     boot_disk_gb: 10,
@@ -326,15 +344,48 @@ task CountCnvs {
   command <<<
     set -euo pipefail
 
+    # Collect query left and right boundaries as single bp intervals
+    zcat ~{query} | grep -ve "^#" | awk -v OFS="\t" '{ print $1, $2, $2+1 }' \
+    | bgzip -c > query.left.bed.gz
+    zcat ~{query} | grep -ve "^#" | awk -v OFS="\t" '{ print $1, $3, $3+1 }' \
+    | bgzip -c > query.right.bed.gz
+
+    # Collect all mutation rate matrix bin pair left and right boundaries
+    # together as single bp intervals
+    {
+      ( zcat ~{mu_bed} | grep -ve "^#" | awk -v OFS="\t" '{ print $1, $2, $2+1 }' );
+      ( zcat ~{mu_bed} | grep -ve "^#" | awk -v OFS="\t" '{ print $1, $3, $3+1 }' );
+    } \
+    | sort -Vk1,1 -k2,2n | uniq | bgzip -c > mu.bin_bounds.bed.gz
+
+    # Expand query segments to bin pair boundaries to match mutation rate querying
+    paste \
+    <(
+      bedtools closest -a query.left.bed.gz -b mu.bin_bounds.bed.gz -id -D ref \
+      | cut -f4,5
+    ) <(
+      bedtools closest -a query.right.bed.gz -b mu.bin_bounds.bed.gz -iu -D ref \
+      | cut -f5
+    ) \
+    | cat <( zcat ~{query} | sed -n '1p' ) - | bgzip -c > ~{query_prefix}.expanded.bed.gz
+    tabix -f ~{query_prefix}.expanded.bed.gz
+
+    # TODO: What if query segment is larger than the largest allowed bin pair?
+
+    # TODO: Filter out SVs from VCF that lie in bin pairs not in the mu matrix
+    # e.g. SVs >500kb when mu matrix is limited to <=500kb
+    
+
     # Count SVs
     athena_cmd="athena count-sv --query-format bed --outfile ~{prefix}.counts.tsv.gz"
     athena_cmd="$athena_cmd --bgzip  ~{sep=' ' athena_countsv_options}"
-    athena_cmd="$athena_cmd ~{vcf} ~{query}"
+    athena_cmd="$athena_cmd ~{vcf} ~{query_prefix}.expanded.bed.gz"
     echo -e "Now counting SVs using command:\n$athena_cmd"
     eval $athena_cmd
   >>>
 
   output {
+    File expanded_query_tsv = "~{query_prefix}.expanded.bed.gz"
     File counts_tsv = "~{prefix}.counts.tsv.gz"
   }
   
