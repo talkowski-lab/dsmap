@@ -13,6 +13,7 @@
 
 version 1.0
 
+import "CountCnvsInBins.wdl"
 import "Utils.wdl"
 import "Structs.wdl"
 
@@ -37,11 +38,13 @@ workflow CalcSegmentDosageSensitivity {
 
     # Dockers
     String athena_docker
+    String athena_cloud_docker
     String dsmap_r_docker
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_filter_query_chrom
     RuntimeAttr? runtime_attr_query_mu
+    RuntimeAttr? runtime_attr_expand_query
     RuntimeAttr? runtime_attr_count_cnvs
     RuntimeAttr? runtime_attr_merge_data
     RuntimeAttr? runtime_attr_plot_mu_hist
@@ -80,7 +83,7 @@ workflow CalcSegmentDosageSensitivity {
     File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP." + contig + ".mu.bed.gz"
     File dup_mu_bed_idx = dup_mu_bed + ".tbi" 
 
-    # Step 2a. Compute mutation rates for all deletions overlapping
+    # Step 2a. Tally mutation rates for all deletions in bin-pairs overlapping
     # bins housing each segment
     call QueryMu as QueryMuDel {
       input:
@@ -94,7 +97,7 @@ workflow CalcSegmentDosageSensitivity {
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 2b. Compute mutation rates for all duplications overlapping
+    # Step 2b. Tally mutation rates for all duplications in bin-pairs overlapping
     # bins housing each segment
     call QueryMu as QueryMuDup {
       input:
@@ -108,54 +111,61 @@ workflow CalcSegmentDosageSensitivity {
         runtime_attr_override=runtime_attr_query_mu
     }
 
-    # Step 3a. Count deletions overlapping bins housing each segment
-    call CountCnvs as CountDel {
+    # Step 3. To match mu query and CNV counting strategy, expand query segment
+    # boundaries to nearest neighboring larger bins in mu matrix
+    # NOTE: Segments with the same such neighboring bin boundaries will have
+    # same mu, CNV count, and O/E estimates
+    # NOTE: Assumes that mu matrices for deletions and duplications are defined
+    # over the same space
+    call ExpandQueryToBins {
       input:
-        vcf=del_vcf,
-        vcf_idx=del_vcf_idx,
         query=FilterQuerySingleChrom.query_chrom,
         query_idx=FilterQuerySingleChrom.query_chrom_idx,
         mu_bed=del_mu_bed,
         mu_bed_idx=del_mu_bed_idx,
-        athena_countsv_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + del_prefix,
         athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_count_cnvs
+        runtime_attr_override=runtime_attr_expand_query
     }
 
-    # Step 3b. Count duplications overlapping bins housing each segment
-    call CountCnvs as CountDup {
+    # Step 4. Count deletions and duplications overlapping bins housing each segment
+    call CountCnvsInBins.CountCnvsInBins as CountQueryCnvs {
       input:
-        vcf=dup_vcf,
-        vcf_idx=dup_vcf_idx,
-        query=FilterQuerySingleChrom.query_chrom,
-        query_idx=FilterQuerySingleChrom.query_chrom_idx,
-        mu_bed=dup_mu_bed,
-        mu_bed_idx=dup_mu_bed_idx,
-        athena_countsv_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + dup_prefix,
+        del_vcf=del_vcf,
+        del_vcf_idx=del_vcf_idx,
+        dup_vcf=dup_vcf,
+        dup_vcf_idx=dup_vcf_idx,
+        bins_bucket=ExpandQueryToBins.expanded_query,
+        bins_bed_prefix=basename(ExpandQueryToBins.expanded_query, ".bed.gz"),
+        bins_are_paired=false,
+        contigs_fai=contigs_fai,
+        prefix=prefix + "." + contig,
+        count_probs=false,
+        full_segment_overlap=full_segment_overlap,
+        run_diagnostics=false,
         athena_docker=athena_docker,
-        runtime_attr_override=runtime_attr_count_cnvs
+        athena_cloud_docker=athena_cloud_docker,
+        dsmap_r_docker=dsmap_r_docker,
+        runtime_attr_count_bin_cnvs=runtime_attr_count_cnvs
     }
   }
 
-  # Step 4a. Merge and analyze outputs from 2a & 3a
+  # Step 5a. Merge and analyze deletion outputs
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeDelData {
     input:
       mu_tsvs=QueryMuDel.mu_tsv,
-      counts_tsvs=CountDel.counts_tsv,
+      counts_tsvs=flatten(CountQueryCnvs.bin_del_counts),
       prefix=prefix + del_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
   
-  # Step 4b. Merge and analyze outputs from 2b & 3b
+  # Step 5b. Merge and analyze duplication outputs
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeDupData {
     input:
       mu_tsvs=QueryMuDup.mu_tsv,
-      counts_tsvs=CountDup.counts_tsv,
+      counts_tsvs=flatten(CountQueryCnvs.bin_dup_counts),
       prefix=prefix + dup_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
@@ -232,7 +242,7 @@ task FilterQuerySingleChrom {
     set -euo pipefail
 
     # Sort by chr, start, end position
-    zcat ~{query} | sed -n '1p' > query.header
+    zcat ~{query} | grep -e "^#" | sed -n '1p' > query.header
     tabix -h ~{query} ~{contig} | grep -ve "^#" | sort -Vk1,1 -k2,2n -k3,3n \
     | cat query.header - \
     | bgzip -c > ~{query_prefix}.~{contig}.bed.gz
@@ -308,21 +318,17 @@ task QueryMu {
 }
 
 
-# Count number of qualifying CNVs per segment
-# NOTE: To match mu and CNV counting strategies, query segments are extended
-# to the boundaries of the nearest neighboring larger bins in the mu matrix
-# before counting. This means that segments with the same such neighboring bin
-# boundaries will have the same mu, CNV count, and O/E estimates
-task CountCnvs {
+# To match mu and CNV counting strategies, extend query segments to boundaries of
+# nearest neighboring larger bins in mu matrix
+# TODO: Filter out SVs from VCF that lie in bin pairs not in the mu matrix
+# e.g. SVs >500kb when mu matrix is limited to <=500kb
+# TODO: What if query segment is larger than the largest allowed bin pair?
+task ExpandQueryToBins {
   input {
-    File vcf
-    File vcf_idx
     File query
     File query_idx
     File mu_bed
     File mu_bed_idx
-    Array[String] athena_countsv_options
-    String prefix
 
     String athena_docker
 
@@ -333,8 +339,8 @@ task CountCnvs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 2.5,
-    disk_gb: 10 + ceil(2 * size([query, vcf], "GB")),
+    mem_gb: 8,
+    disk_gb: 10 + ceil(2 * size([query, mu_bed], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -369,24 +375,10 @@ task CountCnvs {
     ) \
     | cat <( zcat ~{query} | sed -n '1p' ) - | bgzip -c > ~{query_prefix}.expanded.bed.gz
     tabix -f ~{query_prefix}.expanded.bed.gz
-
-    # TODO: What if query segment is larger than the largest allowed bin pair?
-
-    # TODO: Filter out SVs from VCF that lie in bin pairs not in the mu matrix
-    # e.g. SVs >500kb when mu matrix is limited to <=500kb
-    
-
-    # Count SVs
-    athena_cmd="athena count-sv --query-format bed --outfile ~{prefix}.counts.tsv.gz"
-    athena_cmd="$athena_cmd --bgzip  ~{sep=' ' athena_countsv_options}"
-    athena_cmd="$athena_cmd ~{vcf} ~{query_prefix}.expanded.bed.gz"
-    echo -e "Now counting SVs using command:\n$athena_cmd"
-    eval $athena_cmd
   >>>
 
   output {
-    File expanded_query_tsv = "~{query_prefix}.expanded.bed.gz"
-    File counts_tsv = "~{prefix}.counts.tsv.gz"
+    File expanded_query = "~{query_prefix}.expanded.bed.gz"
   }
   
   runtime {

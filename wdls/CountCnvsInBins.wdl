@@ -4,7 +4,7 @@
 #
 # CountCnvsInBins.wdl
 #
-# Count CNVs per 1D bin and 2D bin-pair
+# Count CNVs per 1D bin or 2D bin-pair
 #
 # Copyright (c) 2024-Present Lily Wang and the Talkowski Laboratory
 # Distributed under terms of the MIT License (see LICENSE)
@@ -36,6 +36,7 @@ workflow CountCnvsInBins {
 
     # Count options
     Boolean count_probs
+    Boolean full_segment_overlap = false
 
     # Diagnostics options
     Boolean run_diagnostics = true
@@ -177,6 +178,7 @@ workflow CountCnvsInBins {
         bins_bed_idx=bins_bed_idx,
         bins_are_paired=bins_are_paired,
         count_probs=count_probs,
+        full_segment_overlap=full_segment_overlap,
         prefix=del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_bin_cnvs
@@ -191,6 +193,7 @@ workflow CountCnvsInBins {
         bins_bed_idx=bins_bed_idx,
         bins_are_paired=bins_are_paired,
         count_probs=count_probs,
+        full_segment_overlap=full_segment_overlap,
         prefix=dup_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_count_bin_cnvs
@@ -324,6 +327,7 @@ task CountCnvs {
     File bins_bed_idx
     Boolean bins_are_paired
     Boolean count_probs
+    Boolean full_segment_overlap = false
     String? contig
     String prefix
 
@@ -352,10 +356,17 @@ task CountCnvs {
   command <<<
     set -euo pipefail
 
+    # Create option for filtering to CNVs with full bin overlap
+    athena_options=""
+    if [ "~{full_segment_overlap}" == "true" ] && [ "~{bins_are_paired}" == "false" ]; then
+      athena_options="$athena_options --fraction 1.0"
+    fi
+
     # Count SVs
     athena_cmd="athena count-sv --query-format ~{true='pairs' false='bins' bins_are_paired}"
     athena_cmd="$athena_cmd --comparison ~{true='breakpoint' false='overlap' bins_are_paired}"
     athena_cmd="$athena_cmd ~{true='--probabilities' false='' count_probs}"
+    athena_cmd="$athena_cmd $athena_options"
     athena_cmd="$athena_cmd --outfile ~{outfile} --bgzip"
     athena_cmd="$athena_cmd ~{vcf} ~{bins_bed}"
     echo -e "Now counting SVs using command:\n$athena_cmd"
