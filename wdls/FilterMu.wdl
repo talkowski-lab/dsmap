@@ -39,8 +39,8 @@ workflow FilterMu {
   # Parallelize per chromosome
   scatter ( contig in contigs ) {
     File pairs_bed = pairs_bucket + "/" + pairs_bed_prefix + "." + contig + ".bed.gz"
-    File del_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DEL" + contig + ".bed.gz"
-    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP" + contig + ".bed.gz"
+    File del_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DEL" + "." + contig + ".bed.gz"
+    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP" + "." + contig + ".bed.gz"
 
     # Filter DEL and DUP mutation matrices to input pairs
     call Utils.ApplyMatchBED as FilterDelMuToPairs {
