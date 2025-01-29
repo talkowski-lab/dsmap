@@ -379,6 +379,7 @@ task ExpandQueryToBins {
 
   output {
     File expanded_query = "~{query_prefix}.expanded.bed.gz"
+    File expanded_query_idx = "~{query_prefix}.expanded.bed.gz.tbi"
   }
   
   runtime {
