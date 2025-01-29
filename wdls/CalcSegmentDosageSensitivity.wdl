@@ -295,7 +295,7 @@ task QueryMu {
     set -euo pipefail
 
     # Query mutation rates
-    athena_cmd="athena mu-query --gzip -o ~{prefix}.mu.tsv.gz"
+    athena_cmd="athena mu-query --bgzip -o ~{prefix}.mu.tsv.gz"
     athena_cmd="$athena_cmd ~{sep=' ' athena_query_options}"
     athena_cmd="$athena_cmd ~{mu_bed} ~{query}"
     echo -e "Now querying mutation rates using command:\n$athena_cmd"
