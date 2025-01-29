@@ -134,7 +134,7 @@ workflow CalcSegmentDosageSensitivity {
         del_vcf_idx=del_vcf_idx,
         dup_vcf=dup_vcf,
         dup_vcf_idx=dup_vcf_idx,
-        bins_bucket=ExpandQueryToBins.expanded_query,
+        bins_bucket=sub(ExpandQueryToBins.expanded_query, "/" + basename(ExpandQueryToBins.expanded_query), ""),
         bins_bed_prefix=basename(ExpandQueryToBins.expanded_query, ".bed.gz"),
         bins_are_paired=false,
         contigs_fai=contigs_fai,
