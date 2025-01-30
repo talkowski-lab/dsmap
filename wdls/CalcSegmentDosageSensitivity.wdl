@@ -13,9 +13,9 @@
 
 version 1.0
 
-import "CountCnvsInBins.wdl"
 import "Utils.wdl"
 import "Structs.wdl"
+import "CountCnvsInBins.wdl"
 
 
 workflow CalcSegmentDosageSensitivity {
@@ -70,8 +70,6 @@ workflow CalcSegmentDosageSensitivity {
   scatter ( contig in contigs ) {
 
     # Step 1. Filter query to chromosome
-    # input: query = gs://dsmap/hg38_demo_v3_corrected_an/data/experimental/noncoding/DSMap_hg38_v3_demo_corrected_an.noncoding.BinAndAnnotateGenome/DSMap_hg38_v3_demo_corrected_an.noncoding.bins.bed.gz
-    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
     call FilterQuerySingleChrom {
       input:
         query=query,
@@ -88,10 +86,6 @@ workflow CalcSegmentDosageSensitivity {
 
     # Step 2a. Tally mutation rates for all deletions in bin-pairs overlapping
     # bins housing each segment
-    # input: query = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
-    # mu_bed = gs://dsmap/hg38_demo_v3_corrected_an/data/experimental/noncoding/DSMap_hg38_v3_demo.noncoding.DEL.chr1.mu.bed.gz
-    # prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1
-    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1.mu.tsv.gz
     call QueryMu as QueryMuDel {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -124,8 +118,6 @@ workflow CalcSegmentDosageSensitivity {
     # same mu, CNV count, and O/E estimates
     # NOTE: Assumes that mu matrices for deletions and duplications are defined
     # over the same space
-    # input: query = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
-    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.expanded.bed.gz
     call ExpandQueryToBins {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -137,8 +129,6 @@ workflow CalcSegmentDosageSensitivity {
     }
 
     # Step 4. Count deletions and duplications overlapping bins housing each segment
-    # input: prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1
-    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.DEL.bins.counts.bed.gz
     call CountCnvsInBins.CountCnvsInBins as CountQueryCnvs {
       input:
         del_vcf=del_vcf,
@@ -160,8 +150,6 @@ workflow CalcSegmentDosageSensitivity {
     }
 
     # Step 5a. Reformat deletion counts data for merging
-    # input: prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1
-    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1.counts.tsv.gz
     call FormatCounts as FormatDelCounts {
       input:
         counts=CountQueryCnvs.bin_del_counts[0],
@@ -192,7 +180,6 @@ workflow CalcSegmentDosageSensitivity {
   }
   
   # Step 6b. Merge and analyze duplication outputs
-  # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeDupData {
     input:
       mu_tsvs=QueryMuDup.mu_tsv,
