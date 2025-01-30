@@ -46,6 +46,7 @@ workflow CalcSegmentDosageSensitivity {
     RuntimeAttr? runtime_attr_query_mu
     RuntimeAttr? runtime_attr_expand_query
     RuntimeAttr? runtime_attr_count_cnvs
+    RuntimeAttr? runtime_attr_format_counts
     RuntimeAttr? runtime_attr_merge_data
     RuntimeAttr? runtime_attr_plot_mu_hist
     RuntimeAttr? runtime_attr_merge_diagnostics
@@ -69,6 +70,8 @@ workflow CalcSegmentDosageSensitivity {
   scatter ( contig in contigs ) {
 
     # Step 1. Filter query to chromosome
+    # input: query = gs://dsmap/hg38_demo_v3_corrected_an/data/experimental/noncoding/DSMap_hg38_v3_demo_corrected_an.noncoding.BinAndAnnotateGenome/DSMap_hg38_v3_demo_corrected_an.noncoding.bins.bed.gz
+    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
     call FilterQuerySingleChrom {
       input:
         query=query,
@@ -78,13 +81,17 @@ workflow CalcSegmentDosageSensitivity {
         runtime_attr_override=runtime_attr_filter_query_chrom
     }
 
-    File del_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DEL." + contig + ".mu.bed.gz"
+    File del_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DEL" + "." + contig + ".mu.bed.gz"
     File del_mu_bed_idx = del_mu_bed + ".tbi"
-    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP." + contig + ".mu.bed.gz"
+    File dup_mu_bed = mu_bucket + "/" + mu_bed_prefix + ".DUP" + "." + contig + ".mu.bed.gz"
     File dup_mu_bed_idx = dup_mu_bed + ".tbi" 
 
     # Step 2a. Tally mutation rates for all deletions in bin-pairs overlapping
     # bins housing each segment
+    # input: query = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
+    # mu_bed = gs://dsmap/hg38_demo_v3_corrected_an/data/experimental/noncoding/DSMap_hg38_v3_demo.noncoding.DEL.chr1.mu.bed.gz
+    # prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1
+    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1.mu.tsv.gz
     call QueryMu as QueryMuDel {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -92,7 +99,7 @@ workflow CalcSegmentDosageSensitivity {
         mu_bed=del_mu_bed,
         mu_bed_idx=del_mu_bed_idx,
         athena_query_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + del_prefix,
+        prefix=prefix + del_prefix + "." + contig,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
@@ -106,7 +113,7 @@ workflow CalcSegmentDosageSensitivity {
         mu_bed=dup_mu_bed,
         mu_bed_idx=dup_mu_bed_idx,
         athena_query_options=athena_sv_options,
-        prefix=basename(FilterQuerySingleChrom.query_chrom, ".bed.gz") + dup_prefix,
+        prefix=prefix + dup_prefix + "." + contig,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_query_mu
     }
@@ -117,6 +124,8 @@ workflow CalcSegmentDosageSensitivity {
     # same mu, CNV count, and O/E estimates
     # NOTE: Assumes that mu matrices for deletions and duplications are defined
     # over the same space
+    # input: query = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.bed.gz
+    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.expanded.bed.gz
     call ExpandQueryToBins {
       input:
         query=FilterQuerySingleChrom.query_chrom,
@@ -128,6 +137,8 @@ workflow CalcSegmentDosageSensitivity {
     }
 
     # Step 4. Count deletions and duplications overlapping bins housing each segment
+    # input: prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1
+    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.chr1.DEL.bins.counts.bed.gz
     call CountCnvsInBins.CountCnvsInBins as CountQueryCnvs {
       input:
         del_vcf=del_vcf,
@@ -147,25 +158,45 @@ workflow CalcSegmentDosageSensitivity {
         dsmap_r_docker=dsmap_r_docker,
         runtime_attr_count_bin_cnvs=runtime_attr_count_cnvs
     }
+
+    # Step 5a. Reformat deletion counts data for merging
+    # input: prefix = DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1
+    # output: DSMap_hg38_v3_demo_corrected_an.noncoding.bins.DEL.chr1.counts.tsv.gz
+    call FormatCounts as FormatDelCounts {
+      input:
+        counts=CountQueryCnvs.bin_del_counts[0],
+        prefix=prefix + del_prefix + "." + contig,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_format_counts
+    }
+
+    # Step 5b. Reformat duplication counts data for merging
+    call FormatCounts as FormatDupCounts {
+      input:
+        counts=CountQueryCnvs.bin_dup_counts[0],
+        prefix=prefix + dup_prefix + "." + contig,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_format_counts
+    }
   }
 
-  # Step 5a. Merge and analyze deletion outputs
+  # Step 6a. Merge and analyze deletion outputs
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeDelData {
     input:
       mu_tsvs=QueryMuDel.mu_tsv,
-      counts_tsvs=flatten(CountQueryCnvs.bin_del_counts),
+      counts_tsvs=FormatDelCounts.counts_tsv,
       prefix=prefix + del_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
   }
   
-  # Step 5b. Merge and analyze duplication outputs
+  # Step 6b. Merge and analyze duplication outputs
   # Note: for now, just merge & joint outputs. TODO: add analysis components
   call MergeMuAndCounts as MergeDupData {
     input:
       mu_tsvs=QueryMuDup.mu_tsv,
-      counts_tsvs=flatten(CountQueryCnvs.bin_dup_counts),
+      counts_tsvs=FormatDupCounts.counts_tsv,
       prefix=prefix + dup_prefix,
       athena_docker=athena_docker,
       runtime_attr_override=runtime_attr_merge_data
@@ -380,6 +411,54 @@ task ExpandQueryToBins {
   output {
     File expanded_query = "~{query_prefix}.expanded.bed.gz"
     File expanded_query_idx = "~{query_prefix}.expanded.bed.gz.tbi"
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Format CNV count file to match mu file format
+task FormatCounts {
+  input {
+    File counts
+    String prefix
+
+    String athena_docker
+    RuntimeAttr? runtime_attr_override    
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(10 * size(counts, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    echo -e '#query\tn_svs' > counts.header
+    zcat ~{counts} \
+    | grep -ve '^#' \
+    | awk -F'\t' -v OFS='\t' '{print $1"_"$2"_"$3, $4}' \
+    | cat counts.header - \
+    | gzip -c \
+    > ~{prefix}.counts.tsv.gz
+  >>>
+
+  output {
+    File counts_tsv = "~{prefix}.counts.tsv.gz"
   }
   
   runtime {
