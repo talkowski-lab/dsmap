@@ -21,12 +21,15 @@ workflow FilterVcf {
     # General inputs
     File vcf
     File vcf_idx
-    Float max_af = 0.01
-    Array[String] af_fields
-    Int min_ac = 1
-    Int min_an
-    Int min_qual = 2
-    Float min_p_hwe = 0.000001
+    Float? max_af = 0.01
+    Array[String]? af_fields
+    Int? min_ac = 1
+    Int? min_an
+    Int? min_qual = 2
+    Float? min_p_hwe = 0.000001
+    File? exclusion_bed
+    Boolean split_cnv = true
+    String? filter_prefix
 
     # Diagnostics options
     Boolean run_diagnostics = true
@@ -38,65 +41,108 @@ workflow FilterVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  # Filter VCF to high-quality rare DELs and DUPs
-  call FilterCnvs as FilterDels {
-    input:
-      vcf=vcf,
-      vcf_idx=vcf_idx,
-      cnv="DEL",
-      max_af=max_af,
-      af_fields=af_fields,
-      min_ac=min_ac,
-      min_an=min_an,
-      min_qual=min_qual,
-      p_hwe=min_p_hwe,
-      prefix=basename(vcf, ".vcf.gz") + ".filtered.DEL",
-      athena_docker=athena_docker,
-      runtime_attr_override=runtime_attr_override
-  }
-  call FilterCnvs as FilterDups {
-    input:
-      vcf=vcf,
-      vcf_idx=vcf_idx,
-      cnv="DUP",
-      max_af=max_af,
-      af_fields=af_fields,
-      min_ac=min_ac,
-      min_an=min_an,
-      min_qual=min_qual,
-      p_hwe=min_p_hwe,
-      prefix=basename(vcf, ".vcf.gz") + ".filtered.DUP",
-      athena_docker=athena_docker,
-      runtime_attr_override=runtime_attr_override
-  }
+  String prefix = basename(vcf, ".vcf.gz") + ( if defined(filter_prefix) then "." + filter_prefix else "" ) + ".filtered"
 
-  if ( run_diagnostics ) {
-    # Compute stats on CNV size and spacing in DEL and DUP VCFs
-    call GetVcfStats as GetDelStats {
+  if ( split_cnv ) {
+    # Filter VCF to high-quality rare DELs and DUPs
+    call FilterCnvs as FilterDels {
       input:
-        vcf=FilterDels.vcf_out,
-        vcf_idx=FilterDels.vcf_idx_out,
-        prefix=basename(vcf, ".vcf.gz") + ".filtered.DEL",
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        cnv="DEL",
+        max_af=max_af,
+        af_fields=af_fields,
+        min_ac=min_ac,
+        min_an=min_an,
+        min_qual=min_qual,
+        p_hwe=min_p_hwe,
+        exclusion_bed=exclusion_bed,
+        prefix=prefix + ".DEL",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
     }
-    call GetVcfStats as GetDupStats {
+    call FilterCnvs as FilterDups {
       input:
-        vcf=FilterDups.vcf_out,
-        vcf_idx=FilterDups.vcf_idx_out,
-        prefix=basename(vcf, ".vcf.gz") + ".filtered.DUP",
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        cnv="DUP",
+        max_af=max_af,
+        af_fields=af_fields,
+        min_ac=min_ac,
+        min_an=min_an,
+        min_qual=min_qual,
+        p_hwe=min_p_hwe,
+        exclusion_bed=exclusion_bed,
+        prefix=prefix + ".DUP",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
+    }
+
+    if ( run_diagnostics ) {
+      # Compute stats on CNV size and spacing in DEL and DUP VCFs
+      call GetVcfStats as GetDelStats {
+        input:
+          vcf=FilterDels.vcf_out,
+          vcf_idx=FilterDels.vcf_idx_out,
+          prefix=prefix + ".DEL",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_override
+      }
+      call GetVcfStats as GetDupStats {
+        input:
+          vcf=FilterDups.vcf_out,
+          vcf_idx=FilterDups.vcf_idx_out,
+          prefix=prefix + ".DUP",
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_override
+      }
+    }
+  }
+  
+  if ( !split_cnv ) {
+    # Filter VCF to high-quality rare CNVs
+    call FilterCnvs {
+      input:
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        max_af=max_af,
+        af_fields=af_fields,
+        min_ac=min_ac,
+        min_an=min_an,
+        min_qual=min_qual,
+        p_hwe=min_p_hwe,
+        exclusion_bed=exclusion_bed,
+        prefix=prefix,
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_override
+    }
+
+    if ( run_diagnostics ) {
+      # Compute stats on CNV size and spacing in VCF
+      call GetVcfStats {
+        input:
+          vcf=FilterCnvs.vcf_out,
+          vcf_idx=FilterCnvs.vcf_idx_out,
+          prefix=prefix,
+          athena_docker=athena_docker,
+          runtime_attr_override=runtime_attr_override
+      }
     }
   }
 
   output {
-    File del_vcf = FilterDels.vcf_out
-    File del_vcf_idx = FilterDels.vcf_idx_out
-    File dup_vcf = FilterDups.vcf_out
-    File dup_vcf_idx = FilterDups.vcf_idx_out
+    # Outputs if split_cnv is optioned
+    File? del_vcf = FilterDels.vcf_out
+    File? del_vcf_idx = FilterDels.vcf_idx_out
+    File? dup_vcf = FilterDups.vcf_out
+    File? dup_vcf_idx = FilterDups.vcf_idx_out
     File? del_vcf_stats = GetDelStats.stats_txt
     File? dup_vcf_stats = GetDupStats.stats_txt
+
+    # Outputs if split_cnv is not optioned
+    File? cnv_vcf = FilterCnvs.vcf_out
+    File? cnv_vcf_idx = FilterCnvs.vcf_idx_out
+    File? cnv_vcf_stats = GetVcfStats.stats_txt
   }
 }
 
@@ -105,15 +151,16 @@ task FilterCnvs {
   input {
     File vcf
     File vcf_idx
-    String cnv
+    String? cnv
     String prefix
 
-    Float max_af
-    Array[String] af_fields
-    Int min_ac
-    Int min_an
-    Int min_qual
-    Float p_hwe
+    Float? max_af
+    Array[String]? af_fields
+    Int? min_ac
+    Int? min_an
+    Int? min_qual
+    Float? p_hwe
+    File? exclusion_bed
 
     String athena_docker
 
@@ -133,18 +180,39 @@ task FilterCnvs {
 
     set -euo pipefail
 
-    athena vcf-filter \
-      --include-chroms "$( seq 1 22 | awk '{ print "chr"$0 }' | paste -s -d, )" \
-      --svtypes ~{cnv} \
-      --maxAF ~{max_af} \
-      --af-field ~{sep=' --af-field ' af_fields} \
-      --minAC ~{min_ac} \
-      --minAN ~{min_an} \
-      --minQUAL ~{min_qual} \
-      --pHWE ~{p_hwe} \
-      --bgzip \
-      ~{vcf} \
-      ~{prefix}.vcf.gz
+    # Create options for filtering
+    athena_options=""
+    if [ "~{defined(cnv)}" == "true" ]; then
+      athena_options="$athena_options --svtypes ~{cnv}"
+    fi
+    if [ "~{defined(max_af)}" == "true" ]; then
+      athena_options="$athena_options --maxAF ~{max_af}"
+    fi
+    if [ "~{defined(af_fields)}" == "true" ]; then
+      athena_options="$athena_options --af-field ~{sep=' --af-field ' af_fields}"
+    fi
+    if [ "~{defined(min_ac)}" == "true" ]; then
+      athena_options="$athena_options --minAC ~{min_ac}"
+    fi
+    if [ "~{defined(min_an)}" == "true" ]; then
+      athena_options="$athena_options --minAN ~{min_an}"
+    fi
+    if [ "~{defined(min_qual)}" == "true" ]; then
+      athena_options="$athena_options --minQUAL ~{min_qual}"
+    fi
+    if [ "~{defined(p_hwe)}" == "true" ]; then
+      athena_options="$athena_options --pHWE ~{p_hwe}"
+    fi
+    if [ "~{defined(exclusion_bed)}" == "true" ]; then
+      athena_options="$athena_options --exclusion-list ~{exclusion_bed}"
+    fi
+
+    # Filter VCF with athena
+    athena_cmd="athena vcf-filter $athena_options"
+    athena_cmd="$athena_cmd --include-chroms '$( seq 1 22 | awk '{ print "chr"$0 }' | paste -s -d, )'"
+    athena_cmd="$athena_cmd --bgzip ~{vcf} ~{prefix}.vcf.gz"
+    echo -e "Now filtering VCF using command:\n$athena_cmd"
+    eval $athena_cmd
     tabix -f ~{prefix}.vcf.gz
 
   >>>
