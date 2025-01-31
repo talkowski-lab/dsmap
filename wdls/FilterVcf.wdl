@@ -22,7 +22,7 @@ workflow FilterVcf {
     File vcf
     File vcf_idx
     Float? max_af
-    Array[String]? af_fields
+    Array[String] af_fields = []
     Int? min_ac
     Int? min_an
     Int? min_qual
@@ -155,7 +155,7 @@ task FilterCnvs {
     String prefix
 
     Float? max_af
-    Array[String]? af_fields
+    Array[String] af_fields = []
     Int? min_ac
     Int? min_an
     Int? min_qual
@@ -188,7 +188,7 @@ task FilterCnvs {
     if [ "~{defined(max_af)}" == "true" ]; then
       athena_options="$athena_options --maxAF ~{max_af}"
     fi
-    if [ "~{defined(af_fields)}" == "true" ]; then
+    if [ ~{length(af_fields)} -gt 0 ]; then
       athena_options="$athena_options --af-field ~{sep=' --af-field ' af_fields}"
     fi
     if [ "~{defined(min_ac)}" == "true" ]; then
