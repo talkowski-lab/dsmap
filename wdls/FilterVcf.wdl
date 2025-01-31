@@ -41,7 +41,7 @@ workflow FilterVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  String prefix = basename(vcf, ".vcf.gz") + ( if defined(filter_prefix) then "." + filter_prefix else "" ) + ".filtered"
+  String prefix = basename(vcf, ".vcf.gz") + if defined(filter_prefix) then "." + filter_prefix else ".filtered"
 
   if ( split_cnv ) {
     # Filter VCF to high-quality rare DELs and DUPs
