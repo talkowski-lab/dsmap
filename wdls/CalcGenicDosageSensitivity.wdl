@@ -52,8 +52,8 @@ workflow CalcGenicDosageSensitivity {
     RuntimeAttr? runtime_attr_merge_diagnostics
   }
 
-  # Extract CDSs and gene bodies from GTF
-  call FilterGtf {
+  # Extract CDSs and gene bodies from GTF to BEDs
+  call FilterGtfToBed {
     input:
       gtf=gtf,
       gtf_idx=gtf_idx,
@@ -68,8 +68,8 @@ workflow CalcGenicDosageSensitivity {
       del_vcf_idx=del_vcf_idx,
       dup_vcf=dup_vcf,
       dup_vcf_idx=dup_vcf_idx,
-      query=FilterGtf.genes_gtf,
-      query_idx=FilterGtf.genes_gtf_idx,
+      query=FilterGtfToBed.genes_bed,
+      query_idx=FilterGtfToBed.genes_bed,
       mu_bucket=mu_bucket,
       mu_bed_prefix=mu_bed_prefix,
       contigs_fai=contigs_fai,
@@ -96,8 +96,8 @@ workflow CalcGenicDosageSensitivity {
       del_vcf_idx=del_vcf_idx,
       dup_vcf=dup_vcf,
       dup_vcf_idx=dup_vcf_idx,
-      query=FilterGtf.coding_gtf,
-      query_idx=FilterGtf.coding_gtf_idx,
+      query=FilterGtfToBed.coding_bed,
+      query_idx=FilterGtfToBed.coding_bed_idx,
       mu_bucket=mu_bucket,
       mu_bed_prefix=mu_bed_prefix,
       contigs_fai=contigs_fai,
@@ -183,8 +183,8 @@ workflow CalcGenicDosageSensitivity {
 }
 
 
-# Filter GTF to CDSs and gene bodies
-task FilterGtf {
+# Filter GTF to CDSs and gene bodies and convert to BED
+task FilterGtfToBed {
   input {
     File gtf
     File gtf_idx
@@ -209,21 +209,37 @@ task FilterGtf {
     set -euo pipefail
 
     # Subset GTF to coding sequences
-    zcat ~{gtf} | awk '{ if ($3 == "CDS") print $0 }' | bgzip -c \
-    > ~{gtf_prefix}.coding.gtf.gz
-    tabix -f ~{gtf_prefix}.coding.gtf.gz
+    paste -d'\t' \
+      <(zcat ~{gtf} | awk -F'\t' -v OFS='\t' '{ if ($3 == "CDS") print $1, $4-1, $5 }')
+      <(
+        zcat ~{gtf} \
+        | awk -F'\t' -v OFS='\t' '{ if ($3 == "CDS") print $9 }' \
+        | awk -F'; ' '{ print $3 }' \
+        | sed 's/^gene_name "\([^"]*\)";/\1/g'
+      ) \
+    | bgzip -c \
+    > ~{gtf_prefix}.coding.bed.gz
+    tabix -f ~{gtf_prefix}.coding.bed.gz
 
     # Subset GTF to gene bodies
-    zcat ~{gtf} | awk '{ if ($3 == "gene") print $0 }' | bgzip -c \
-    > ~{gtf_prefix}.genes.gtf.gz
-    tabix -f ~{gtf_prefix}.genes.gtf.gz
+    paste -d'\t' \
+      <(zcat ~{gtf} | awk -F'\t' -v OFS='\t' '{ if ($3 == "gene") print $1, $4-1, $5 }')
+      <(
+        zcat ~{gtf} \
+        | awk -F'\t' -v OFS='\t' '{ if ($3 == "gene") print $9 }' \
+        | awk -F'; ' '{ print $3 }' \
+        | sed 's/^gene_name "\([^"]*\)";/\1/g'
+      ) \
+    | bgzip -c \
+    > ~{gtf_prefix}.genes.bed.gz
+    tabix -f ~{gtf_prefix}.genes.bed.gz
   >>>
 
   output {
-    File coding_gtf = "~{gtf_prefix}.coding.gtf.gz"
-    File coding_gtf_idx = "~{gtf_prefix}.coding.gtf.gz.tbi"
-    File genes_gtf = "~{gtf_prefix}.genes.gtf.gz"
-    File genes_gtf_idx = "~{gtf_prefix}.genes.gtf.gz.tbi"
+    File coding_bed = "~{gtf_prefix}.coding.bed.gz"
+    File coding_bed_idx = "~{gtf_prefix}.coding.bed.gz.tbi"
+    File genes_bed = "~{gtf_prefix}.genes.bed.gz"
+    File genes_bed_idx = "~{gtf_prefix}.genes.bed.gz.tbi"
   }
   
   runtime {
