@@ -21,12 +21,12 @@ workflow FilterVcf {
     # General inputs
     File vcf
     File vcf_idx
-    Float? max_af = 0.01
+    Float? max_af
     Array[String]? af_fields
-    Int? min_ac = 1
+    Int? min_ac
     Int? min_an
-    Int? min_qual = 2
-    Float? min_p_hwe = 0.000001
+    Int? min_qual
+    Float? min_p_hwe
     File? exclusion_bed
     Boolean split_cnv = true
     String? filter_prefix
