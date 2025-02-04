@@ -50,7 +50,7 @@ workflow FilterMu {
       input:
         inbed=del_mu_bed,
         matchbed=pairs_bed,
-        prefix=mu_bed_prefix + "." + filter_prefix + del_prefix + ".mu.bed.gz",
+        prefix=mu_bed_prefix + "." + filter_prefix + del_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_filter_mu
     }
@@ -58,7 +58,7 @@ workflow FilterMu {
       input:
         inbed=dup_mu_bed,
         matchbed=pairs_bed,
-        prefix=mu_bed_prefix + "." + filter_prefix + dup_prefix + ".mu.bed.gz",
+        prefix=mu_bed_prefix + "." + filter_prefix + dup_prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_filter_mu
     }
