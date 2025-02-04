@@ -30,12 +30,19 @@ dsmapR::load.constants(c("colors", "scales"))
 # Data functions #
 ##################
 # Load data
-load.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.quantiles = 100) {
+load.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.quantiles = 100,
+                        na.val = -49.0, epsilon = 1e-8) {
     # Load DEL and DUP data files
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "bin"
     dup <- read.table(dup.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(dup)[1] <- "bin"
+
+    # Remove rows where mu == na.val or mu is infinite
+    # (na.val is introduced by athena as a placeholder for situations where
+    #  mutation rates are missing)
+    del <- del[!(abs(del$mu - na.val) <= epsilon) & !(is.infinite(del$mu)), ]
+    dup <- dup[!(abs(dup$mu - na.val) <= epsilon) & !(is.infinite(dup$mu)), ]
 
     # Infer bin size
     del_coords <- as.data.frame(str_split_fixed(del[, 1], "_", 3))
@@ -86,12 +93,6 @@ load.scores <- function(del.tsv, dup.tsv, constraint.tsv, n.quantiles = 100) {
     for (i in 2:ncol(constraint.bin.scores)) {
         constraint.bin.scores[, i] <- as.numeric(constraint.bin.scores[, i])
     }
-
-    # # Remove rows where mu == na.val or mu is infinite
-    # # (na.val is introduced by athena as a placeholder for situations where
-    # #  mutation rates are missing)
-    # # TODO: Amend these in the model
-    # mu <- mu[!(mu$mu == na.val) & !(is.infinite(mu$mu)), ]
 
     # Merge data
     bin.scores <- merge(del, dup,
@@ -306,6 +307,14 @@ option_list <- list(
     make_option("--n-quantiles",
         type = "integer", default = 100,
         help = "Number of quantiles to divide bins into [default %default]"
+    ),
+    make_option(c("--mu-na"),
+        type = "double", default = -49.0,
+        help = "Value used to denote NA in DSMap mus [default %default]"
+    ),
+    make_option(c("--epsilon"),
+        type = "double", default = 1e-8,
+        help = "Tolerance for floating point comparisons [default %default]"
     )
 )
 
@@ -341,9 +350,13 @@ out.prefix <- args$args[4]
 # out.bins.del.tsv <- args$args[5]
 # out.bins.dup.tsv <- args$args[6]
 n.quantiles <- opts$`n-quantiles`
+na.val <- opts$`mu-na`
+epsilon <- opts$epsilon
 
-# Load bin obs, mus, exps, and constraint scores
-bin.scores <- load.scores(del.tsv, dup.tsv, constraint.tsv, n.quantiles)
+bin.scores <- load.scores(
+    del.tsv, dup.tsv, constraint.tsv, n.quantiles,
+    na.val, epsilon
+)
 
 # Compute bin O/E summary statistics per constraint score quantile
 oe.stats <- compute.oe.stats.by.quantile(bin.scores, n.quantiles, bootstrap = FALSE)

@@ -29,10 +29,12 @@ dsmapR::load.constants(c("colors"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles = 100) {
+load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles = 100,
+                             na.val = -49.0, epsilon = 1e-8) {
     # Load data files:
     # 1. gene coding DEL, coding DUP, and copy-gain DUP observed and expected counts
     # 2. gene constraint scores
+
     print("Loading DELs...")
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "gene"
@@ -42,6 +44,20 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.qua
     print("Loading CG DUPs...")
     dup.cg <- read.table(dup.cg.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(dup.cg)[1] <- "gene"
+
+    print("Removing genes with NA or infinite mu values...")
+    del <- del[!(abs(del$mu - na.val) <= epsilon) & !(is.infinite(del$mu)), ]
+    dup <- dup[!(abs(dup$mu - na.val) <= epsilon) & !(is.infinite(dup$mu)), ]
+    dup.cg <- dup.cg[!(abs(dup.cg$mu - na.val) <= epsilon) & !(is.infinite(dup.cg$mu)), ]
+
+    print("Computing DEL, DUP, CG DUP exp and O/E...")
+    # Compute expected # of gene dels & dups given sample size
+    n.samples <- 63046
+    # n.samples <- 464297
+    del$exp <- (10^del$mu) * 2 * n.samples
+    dup$exp <- (10^dup$mu) * 2 * n.samples
+    dup.cg$exp <- (10^dup.cg$mu) * 2 * n.samples
+
     print("Loading constraint scores...")
     constraint.scores <- read.table(constraint.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(constraint.scores)[1] <- "gene"
@@ -82,13 +98,6 @@ load.gene.scores <- function(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.qua
     gene.scores$quantile <- ceiling(n.quantiles *
         rank(gene.scores[, constraint.metric], na.last = "keep", ties.method = "random") /
         nrow(gene.scores))
-
-    print("Computing DEL, DUP, CG DUP exp and O/E...")
-    # Compute expected # of gene dels & dups given sample size
-    n.samples <- 63046
-    gene.scores$exp.DEL <- (10^gene.scores$mu.DEL) * 2 * n.samples
-    gene.scores$exp.DUP <- (10^gene.scores$mu.DUP) * 2 * n.samples
-    gene.scores$exp.DUP.CG <- (10^gene.scores$mu.DUP.CG) * 2 * n.samples
 
     # Compute gene O/E
     gene.scores$oe.DEL <- gene.scores$n_svs.DEL / gene.scores$exp.DEL
@@ -251,6 +260,14 @@ option_list <- list(
     make_option("--n-quantiles",
         type = "integer", default = 100,
         help = "Number of quantiles to divide genes into [default %default]"
+    ),
+    make_option(c("--mu-na"),
+        type = "double", default = -49.0,
+        help = "Value used to denote NA in DSMap mus [default %default]"
+    ),
+    make_option(c("--epsilon"),
+        type = "double", default = 1e-8,
+        help = "Tolerance for floating point comparisons [default %default]"
     )
 )
 
@@ -289,11 +306,16 @@ out.genes.dup.tsv <- args$args[7]
 out.genes.dup.cg.tsv <- args$args[8]
 n.quantiles <- opts$`n-quantiles`
 constraint.label <- opts$`constraint-label`
+na.val <- opts$`mu-na`
+epsilon <- opts$epsilon
 print(constraint.label)
 
 print("Loading scores...")
 # Load gene obs, mus, exps, and constraint scores
-gene.scores <- load.gene.scores(del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv, n.quantiles)
+gene.scores <- load.gene.scores(
+    del.tsv, dup.tsv, dup.cg.tsv, constraint.tsv,
+    n.quantiles, na.val, epsilon
+)
 constraint.metric <- gene.scores[[2]]
 print(constraint.metric)
 gene.scores <- gene.scores[[1]]

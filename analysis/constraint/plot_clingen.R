@@ -27,10 +27,17 @@ dsmapR::load.constants(c("colors", "scales"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(cnv.tsv, clingen.txt) {
-    # Load gene CNV observed and expected counts
+load.gene.scores <- function(cnv.tsv, clingen.txt, na.val = -49.0, epsilon = 1e-8) {
+    # Load gene CNV observed counts and mus
     cnv.scores <- read.table(cnv.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(cnv.scores)[1] <- "gene"
+
+    # Remove rows where mu == na.val or mu is infinite
+    # (na.val is introduced by athena as a placeholder for situations where
+    #  mutation rates are missing)
+    cnv.scores <- cnv.scores[
+        !(abs(cnv.scores$mu - na.val) <= epsilon) & !(is.infinite(cnv.scores$mu)),
+    ]
 
     # Load and preprocess ClinGen gene dosage sensitivity data
     clingen <- read.table(clingen.txt, header = TRUE, sep = ",", comment.char = "")
@@ -103,7 +110,7 @@ plot.cnv.oe <- function(dat, cnv, dosage.sens) {
         oes <- dat[dat[, paste(dosage.sens, "evidence", sep = "_")] %in%
             levels(dat[, paste(dosage.sens, "evidence", sep = "_")])[t], ]$oe
         # Replace value for OE = 0 before taking log to avoid infinite log
-        oes[oes == 0] <- oe.zero.val
+        oes[abs(oes) <= epsilon] <- oe.zero.val
         # Take log of O/Es
         oes <- log10(oes)
         # Compute histogram distribution
@@ -163,6 +170,14 @@ option_list <- list(
     make_option(c("--cnv"),
         help = "Specify CNV type. Used for plotting colors only.",
         type = "character", default = NA
+    ),
+    make_option(c("--mu-na"),
+        type = "double", default = -49.0,
+        help = "Value used to denote NA in DSMap mus [default %default]"
+    ),
+    make_option(c("--epsilon"),
+        type = "double", default = 1e-8,
+        help = "Tolerance for floating point comparisons [default %default]"
     )
 )
 
@@ -192,9 +207,11 @@ cnv.tsv <- args$args[1]
 clingen.txt <- args$args[2]
 out.prefix <- args$args[3]
 cnv <- opts$cnv
+na.val <- opts$`mu-na`
+epsilon <- opts$epsilon
 
 # Load gene obs, mus, exps, and constraint scores
-gene.scores <- load.gene.scores(cnv.tsv, clingen.txt)
+gene.scores <- load.gene.scores(cnv.tsv, clingen.txt, na.val, epsilon)
 
 # Plot O/Es of genes by their ClinGen dosage sensitivity evidence tier
 for (dosage.sens in c("HI", "TS")) {

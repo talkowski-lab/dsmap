@@ -27,16 +27,16 @@ dsmapR::load.constants(c("colors", "scales"))
 # Data functions #
 ##################
 # Load data
-load.segment.scores <- function(del.tsv, dup.tsv, n.bins = 100) {
+load.segment.scores <- function(del.tsv, dup.tsv, n.bins = 100, na.val = -49.0, epsilon = 1e-8) {
     # Load data files
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     dup <- read.table(dup.tsv, header = TRUE, sep = "\t", comment.char = "")
 
-    # # Remove rows where mu == na.val or mu is infinite
-    # # (na.val is introduced by athena as a placeholder for situations where
-    # #  mutation rates are missing)
-    # # TODO: Amend these in the model
-    # mu <- mu[!(mu$mu == na.val) & !(is.infinite(mu$mu)), ]
+    # Remove rows where mu == na.val or mu is infinite
+    # (na.val is introduced by athena as a placeholder for situations where
+    #  mutation rates are missing)
+    del <- del[!(abs(del$mu - na.val) <= epsilon) & !(is.infinite(del$mu)), ]
+    dup <- dup[!(abs(dup$mu - na.val) <= epsilon) & !(is.infinite(dup$mu)), ]
 
     colnames(del)[1] <- "segment"
     colnames(dup)[1] <- "segment"
@@ -75,7 +75,7 @@ compute.cor <- function(oes) {
 # Plotting functions #
 ######################
 # Plot segment CNV O/E distribution
-plot.cnv.oe <- function(dat, cnv, segment.name = "Segment") {
+plot.cnv.oe <- function(dat, cnv, segment.name = "Segment", epsilon = 1e-8) {
     # Set plot parameters
     if (cnv %in% c("DEL", "DUP", "CNV")) {
         bar.color <- get(paste(cnv, "colors", sep = "."))$main
@@ -86,7 +86,7 @@ plot.cnv.oe <- function(dat, cnv, segment.name = "Segment") {
     oes <- dat[, paste("oe", cnv, sep = ".")]
     # Replace value for OE = 0 before taking log to avoid infinite log
     oe.zero.val <- 10**-3
-    oes[oes == 0] <- oe.zero.val
+    oes[abs(oes) <= epsilon] <- oe.zero.val
     # oes <- oes[oes != 0]
     # Take log of O/Es
     oes <- log10(oes)
@@ -161,6 +161,14 @@ option_list <- list(
     make_option("--segment-name",
         type = "character", default = "Segment",
         help = "Segment type (for plot titles only) [default %default]"
+    ),
+    make_option(c("--mu-na"),
+        type = "double", default = -49.0,
+        help = "Value used to denote NA in DSMap mus [default %default]"
+    ),
+    make_option(c("--epsilon"),
+        type = "double", default = 1e-8,
+        help = "Tolerance for floating point comparisons [default %default]"
     )
 )
 
@@ -192,9 +200,11 @@ dup.tsv <- args$args[2]
 out.prefix <- args$args[3]
 n.quantiles <- opts$`n-quantiles`
 segment.name <- opts$`segment-name`
+na.val <- opts$`mu-na`
+epsilon <- opts$epsilon
 
 # Load segment obs, mus, exps, and O/Es
-segment.scores <- load.segment.scores(del.tsv, dup.tsv, n.quantiles)
+segment.scores <- load.segment.scores(del.tsv, dup.tsv, n.quantiles, na.val, epsilon)
 # Compute DEL O/E vs. DUP O/E correlation
 cor.estimate <- compute.cor(segment.scores)
 

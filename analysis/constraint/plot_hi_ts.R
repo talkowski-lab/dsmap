@@ -28,12 +28,19 @@ dsmapR::load.constants(c("colors"))
 # Data functions #
 ##################
 # Load data
-load.gene.scores <- function(del.tsv, dup.cg.tsv, n.quantiles = 100) {
+load.gene.scores <- function(del.tsv, dup.cg.tsv, n.quantiles = 100, na.val = -49.0,
+                             epsilon = 1e-8) {
     # Load gene coding DEL and copy-gain DUP observed and expected counts
     del <- read.table(del.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(del)[1] <- "gene"
     dup.cg <- read.table(dup.cg.tsv, header = TRUE, sep = "\t", comment.char = "")
     colnames(dup.cg)[1] <- "gene"
+
+    # Remove rows where mu == na.val or mu is infinite
+    # (na.val is introduced by athena as a placeholder for situations where
+    #  mutation rates are missing)
+    del <- del[!(abs(del$mu - na.val) <= epsilon) & !(is.infinite(del$mu)), ]
+    dup.cg <- dup.cg[!(abs(dup.cg$mu - na.val) <= epsilon) & !(is.infinite(dup.cg$mu)), ]
 
     # Add colname suffixes for each CNV type and merge
     colnames(del) <- ifelse(
@@ -104,6 +111,14 @@ option_list <- list(
     make_option("--n-quantiles",
         type = "integer", default = 100,
         help = "Number of quantiles to divide genes into [default %default]"
+    ),
+    make_option(c("--mu-na"),
+        type = "double", default = -49.0,
+        help = "Value used to denote NA in DSMap mus [default %default]"
+    ),
+    make_option(c("--epsilon"),
+        type = "double", default = 1e-8,
+        help = "Tolerance for floating point comparisons [default %default]"
     )
 )
 
@@ -133,9 +148,11 @@ del.tsv <- args$args[1]
 dup.cg.tsv <- args$args[2]
 out.pdf <- args$args[3]
 n.quantiles <- opts$`n-quantiles`
+na.val <- opts$`mu-na`
+epsilon <- opts$epsilon
 
 # Load gene obs, mus, exps, and O/Es
-gene.scores <- load.gene.scores(del.tsv, dup.cg.tsv, n.quantiles)
+gene.scores <- load.gene.scores(del.tsv, dup.cg.tsv, n.quantiles, na.val, epsilon)
 # Compute DEL O/E vs. CG DUP O/E correlation
 cor.estimate <- compute.cor(gene.scores)
 # Plot DEL O/E vs. CG DUP O/E
