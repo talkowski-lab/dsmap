@@ -27,7 +27,7 @@ workflow FilterVcf {
     Int? min_an
     Int? min_qual
     Float? min_p_hwe
-    File? exclusion_bed
+    Array[File]? exclusion_beds
     Boolean split_cnv = true
     String? filter_prefix
 
@@ -56,7 +56,7 @@ workflow FilterVcf {
         min_an=min_an,
         min_qual=min_qual,
         p_hwe=min_p_hwe,
-        exclusion_bed=exclusion_bed,
+        exclusion_beds=exclusion_beds,
         prefix=prefix + ".DEL",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
@@ -72,7 +72,7 @@ workflow FilterVcf {
         min_an=min_an,
         min_qual=min_qual,
         p_hwe=min_p_hwe,
-        exclusion_bed=exclusion_bed,
+        exclusion_beds=exclusion_beds,
         prefix=prefix + ".DUP",
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
@@ -111,7 +111,7 @@ workflow FilterVcf {
         min_an=min_an,
         min_qual=min_qual,
         p_hwe=min_p_hwe,
-        exclusion_bed=exclusion_bed,
+        exclusion_beds=exclusion_beds,
         prefix=prefix,
         athena_docker=athena_docker,
         runtime_attr_override=runtime_attr_override
@@ -160,7 +160,7 @@ task FilterCnvs {
     Int? min_an
     Int? min_qual
     Float? p_hwe
-    File? exclusion_bed
+    Array[File]? exclusion_beds
 
     String athena_docker
 
@@ -203,8 +203,8 @@ task FilterCnvs {
     if [ "~{defined(p_hwe)}" == "true" ]; then
       athena_options="$athena_options --pHWE ~{p_hwe}"
     fi
-    if [ "~{defined(exclusion_bed)}" == "true" ]; then
-      athena_options="$athena_options --exclusion-list ~{exclusion_bed}"
+    if [ "~{defined(exclusion_beds)}" == "true" ]; then
+      athena_options="$athena_options --exclusion-list ~{sep=' --exclusion-list ' exclusion_beds}"
     fi
 
     # Filter VCF with athena
