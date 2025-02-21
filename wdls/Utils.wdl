@@ -339,7 +339,7 @@ task ApplyMatchBED {
   command {
     set -euo pipefail
 
-    bedtools intersect -f 1 -r -header -wa \
+    bedtools intersect -f 1 -r -header -wa -u \
       -a ~{inbed} \
       -b ~{matchbed} \
     | bgzip -c \
