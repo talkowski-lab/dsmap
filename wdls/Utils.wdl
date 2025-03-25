@@ -289,9 +289,59 @@ task ApplyExclusionBED {
   command {
     set -euo pipefail
 
-    bedtools intersect -v -header -wa \
+    bedtools intersect -v -header -wa -u \
       -a ~{inbed} \
       -b ~{exbed} \
+    | bgzip -c \
+    > ~{prefix}.bed.gz
+    tabix -f ~{prefix}.bed.gz
+  }
+
+  output {
+    File filtered_bed = "~{prefix}.bed.gz"
+    File filtered_bed_idx = "~{prefix}.bed.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: athena_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Filter an input BED to intervals overlapping intervals in another BED
+task ApplyOverlapBEDs {
+  input {
+    File inbed
+    Array[File] overlapbeds
+    String prefix
+
+    String athena_docker
+
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2.5,
+    disk_gb: 10 + ceil(2 * size(inbed, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    bedtools intersect -header -wa -u \
+      -a ~{inbed} \
+      -b ~{sep=" " overlapbeds} \
     | bgzip -c \
     > ~{prefix}.bed.gz
     tabix -f ~{prefix}.bed.gz

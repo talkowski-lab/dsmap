@@ -29,7 +29,8 @@ workflow BinAndAnnotateGenome {
     File? ref_fasta
 
     # Bin inputs
-    Array[File] bin_exclusion_mask
+    Array[File] bin_exclusion_mask = []
+    Array[File] bin_inclusion_mask = []
     Int bin_size
     Int bins_per_shard
     File? bin_annotations_list_localize
@@ -38,7 +39,8 @@ workflow BinAndAnnotateGenome {
     File? snv_mutrates_tsv
     
     # Pair inputs
-    Array[File]? pair_exclusion_mask
+    Array[File] pair_exclusion_mask = []
+    # Array[File] pair_inclusion_mask = []
     Int max_pair_distance
     Int bins_per_pair_shard
     File? pair_annotations_list_localize
@@ -64,6 +66,7 @@ workflow BinAndAnnotateGenome {
 
     # Runtime overrides
     RuntimeAttr? runtime_attr_make_bins
+    RuntimeAttr? runtime_attr_filter_bins_by_overlap
     RuntimeAttr? runtime_attr_chrom_shard
     RuntimeAttr? runtime_attr_annotate_bins
     RuntimeAttr? runtime_attr_merge_annotated_bins
@@ -78,7 +81,7 @@ workflow BinAndAnnotateGenome {
   }
 
 
-  # Step 1. Create all 1D bins
+  # Step 1a. Create all 1D bins
   call MakeBins {
     input:
       contigs_fai=contigs_fai,
@@ -89,6 +92,23 @@ workflow BinAndAnnotateGenome {
       runtime_attr_override=runtime_attr_make_bins
   }
 
+  # TODO: Consider allowing workflow to be run without bin pairs
+
+  # [Optional] Step 1b. Filter to bins overlapping an input BED
+  if ( length(bin_inclusion_mask) > 0 ) {
+    call Utils.ApplyOverlapBEDs as FilterBinsByOverlap {
+      input:
+        inbed=MakeBins.bins_bed,
+        overlapbeds=select_all(bin_inclusion_mask),
+        prefix=basename(MakeBins.bins_bed, ".bed.gz") + ".overlap_filtered",
+        athena_docker=athena_docker,
+        runtime_attr_override=runtime_attr_filter_bins_by_overlap
+    }
+  }
+
+  File bins_bed = select_first([FilterBinsByOverlap.filtered_bed, MakeBins.bins_bed])
+  File bins_bed_idx = select_first([FilterBinsByOverlap.filtered_bed_idx, MakeBins.bins_bed_idx])
+  
   # Prior to parallelizing per chromosome, must determine number of pairs to sample
   # Note: If decompose_features is false, number of pairs will always be 0 for all chromosomes
   call CalcPairsPerChrom {
@@ -122,8 +142,8 @@ workflow BinAndAnnotateGenome {
     if ( bin_annotations_defined ) {
       call AnnotateBinsSingleChrom.AnnotateBinsSingleChrom as AnnotateBins {
         input:
-          bins=MakeBins.bins_bed,
-          bins_idx=MakeBins.bins_bed_idx,
+          bins=bins_bed,
+          bins_idx=bins_bed_idx,
           bedtools_genome_file=MakeBins.bedtools_genome_file,
           contig=contig[0],
           shard_size=bins_per_shard,
@@ -145,8 +165,8 @@ workflow BinAndAnnotateGenome {
     # Step 3. Pair 2D bins and add 2D bin-pair annotations if any are defined
     call MakeAndAnnotatePairsSingleChrom.MakeAndAnnotatePairsSingleChrom as MakeAndAnnotatePairs {
       input:
-        bins=select_first([AnnotateBins.annotated_bins, MakeBins.bins_bed]),
-        bins_idx=select_first([AnnotateBins.annotated_bins_idx, MakeBins.bins_bed_idx]),
+        bins=select_first([AnnotateBins.annotated_bins, bins_bed]),
+        bins_idx=select_first([AnnotateBins.annotated_bins_idx, bins_bed_idx]),
         bedtools_genome_file=MakeBins.bedtools_genome_file,
         pair_exclusion_mask=pair_exclusion_mask,
         contig=contig[0],
@@ -274,8 +294,8 @@ workflow BinAndAnnotateGenome {
 
   output {
 
-    File bins = MakeBins.bins_bed
-    File bins_idx = MakeBins.bins_bed_idx
+    File bins = bins_bed
+    File bins_idx = bins_bed_idx
 
     Array[File] pairs = MakeAndAnnotatePairs.pairs
     Array[File] pairs_idx = MakeAndAnnotatePairs.pairs_idx
@@ -319,23 +339,29 @@ task MakeBins {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  command {
+  command <<<
     set -euo pipefail
 
     # Create .genome file from contigs_fai
     cut -f1-2 ~{contigs_fai} > contigs.genome
 
-    # Make bins & tabix output BED
-    athena make-bins \
-      --exclusion-list-all ~{sep=' --exclusion-list-all ' bin_exclusion_mask} \
-      --buffer ~{bin_size} \
-      --include-chroms $( cut -f1 contigs.genome | paste -s -d, ) \
-      --bgzip \
-      contigs.genome \
-      ~{bin_size} \
-      ~{prefix}.bins.bed.gz
+    # Create options for bin masks
+    athena_options=""
+    if [ ~{length(bin_exclusion_mask)} -gt 0 ]; then
+      athena_options="$athena_options --exclusion-list-all ~{sep=' --exclusion-list-all ' bin_exclusion_mask}"
+    fi
+
+    # Make bins
+    athena_cmd="athena make-bins $athena_options --bgzip"
+    athena_cmd="$athena_cmd --buffer ~{bin_size}"
+    athena_cmd="$athena_cmd --include-chroms $( cut -f1 contigs.genome | paste -s -d, )"
+    athena_cmd="$athena_cmd contigs.genome ~{bin_size} ~{prefix}.bins.bed.gz"
+    echo -e "Now binning genome using command:\n$athena_cmd"
+    eval $athena_cmd
+ 
+    # Tabix output BED
     tabix -f ~{prefix}.bins.bed.gz
-  }
+  >>>
 
   output {
     File bins_bed = "~{prefix}.bins.bed.gz"
